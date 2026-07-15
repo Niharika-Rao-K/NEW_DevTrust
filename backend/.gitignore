@@ -1,0 +1,7 @@
+node_modules/
+.env
+db.json
+pr-registry.json
+submissions.json
+reputation.json
+notifiers.json

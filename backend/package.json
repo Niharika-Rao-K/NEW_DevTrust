@@ -1,0 +1,27 @@
+{
+  "name": "devtrust-backend",
+  "version": "1.0.0",
+  "description": "DevTrust Oracle Backend — bridges GitHub PRs to Sepolia blockchain",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "set-oracle": "node set-oracle.js",
+    "test": "npx mocha"
+  },
+  "keywords": ["ethereum", "web3", "oracle", "github"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "ethers": "^6.16.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1"
+  },
+  "devDependencies": {
+    "chai": "^6.2.2",
+    "mocha": "^11.3.0"
+  }
+}
