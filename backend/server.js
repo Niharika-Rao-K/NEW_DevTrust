@@ -50,7 +50,7 @@ app.use("/admin/logs", adminLimiter);
 // --- Configuration & Paths ---
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, "db.json");
-const ABI_PATH = path.join(__dirname, "DevTrust.json");
+const ABI_PATH = path.join(__dirname, "devTrust.json");
 
 // --- Initialize Database File if it doesn't exist ---
 if (!fs.existsSync(DB_PATH)) {
