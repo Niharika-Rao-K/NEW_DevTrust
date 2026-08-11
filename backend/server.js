@@ -50,11 +50,15 @@ app.use("/admin/logs", adminLimiter);
 // --- Configuration & Paths ---
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, "db.json");
-const ABI_PATH = path.join(__dirname, "DevTrust.json");
+const ABI_PATH = path.join(__dirname, "devTrust.json");
+const USERS_PATH = path.join(__dirname, "users.json");
 
 // --- Initialize Database File if it doesn't exist ---
 if (!fs.existsSync(DB_PATH)) {
     fs.writeFileSync(DB_PATH, JSON.stringify([], null, 2));
+}
+if (!fs.existsSync(USERS_PATH)) {
+    fs.writeFileSync(USERS_PATH, JSON.stringify([], null, 2));
 }
 
 // --- Blockchain Setup ---
@@ -245,6 +249,58 @@ app.post("/webhook", verifySignature, (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // API ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
+
+app.post("/api/register-wallet", (req, res) => {
+    try {
+        const { githubLogin, walletAddress } = req.body;
+
+        if (!githubLogin || !walletAddress) {
+            return res.status(400).json({
+                error: "GitHub username and wallet address are required"
+            });
+        }
+
+        if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+            return res.status(400).json({
+                error: "Invalid Ethereum wallet address"
+            });
+        }
+
+        const users = JSON.parse(fs.readFileSync(USERS_PATH, "utf8"));
+
+        const existingUser = users.find(
+            user => user.githubLogin.toLowerCase() === githubLogin.toLowerCase()
+        );
+
+        if (existingUser) {
+            existingUser.walletAddress = walletAddress;
+        } else {
+            users.push({
+                githubLogin,
+                walletAddress,
+                registeredAt: new Date().toISOString()
+            });
+        }
+
+        fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
+
+        console.log(
+            `🔗 Wallet registered: ${githubLogin} → ${walletAddress}`
+        );
+
+        res.json({
+            success: true,
+            githubLogin,
+            walletAddress
+        });
+
+    } catch (error) {
+        console.error("❌ Wallet registration error:", error);
+        res.status(500).json({
+            error: "Failed to register wallet"
+        });
+    }
+});
 
 app.get("/api/logs", (req, res) => {
     const data = fs.readFileSync(DB_PATH, "utf8");

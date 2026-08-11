@@ -1,5 +1,7 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router";
+import {useAccount} from "wagmi";
 import { ConnectWalletButton } from "../web3/ConnectWalletButton";
 import { DashboardSection } from "../web3/DashboardSection";
 import { useGitHubAuth } from "../web3/GitHubAuth";
@@ -44,28 +46,41 @@ function ProfileDropdown({
   onRegisterDeveloper,
   onRegisterReviewer,
   onLogout,
+  walletAddress,
+  walletConnected,
 }: {
   user: GitHubUser;
   roles: UserRoles;
   onRegisterDeveloper: () => void;
   onRegisterReviewer: () => void;
   onLogout: () => void;
+  walletAddress?: string;
+  walletConnected: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     }
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
-  const avatarFallback = `https://ui-avatars.com/api/?name=${user.login}&background=00f0ff&color=000`;
+  const avatarFallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    user.login
+  )}&background=00f0ff&color=000`;
 
   return (
     <div ref={ref} className="relative">
+      {/* Profile Button */}
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 glass-strong px-3 py-2 rounded-lg border border-white/20 hover:border-[#00f0ff]/50 transition-all"
@@ -74,51 +89,87 @@ function ProfileDropdown({
           src={user.avatar || avatarFallback}
           alt={user.login}
           className="w-7 h-7 rounded-full border border-white/20"
-          onError={(e) => { (e.target as HTMLImageElement).src = avatarFallback; }}
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = avatarFallback;
+          }}
         />
-        <span className="text-sm font-medium hidden sm:block">{user.login}</span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+
+        <span>{user.login}</span>
+
+        <ChevronDown
+          className={`w-4 h-4 text-gray-400 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
       </button>
 
+      {/* Dropdown */}
       {open && (
         <div className="absolute right-0 mt-2 w-64 glass-strong rounded-xl border border-white/20 shadow-2xl shadow-black/50 z-50 overflow-hidden">
-          {/* User Info */}
+
+          {/* User Information */}
           <div className="px-4 py-3 border-b border-white/10">
             <div className="flex items-center gap-3">
               <img
                 src={user.avatar || avatarFallback}
                 alt={user.login}
                 className="w-10 h-10 rounded-full border border-[#00f0ff]/30"
-                onError={(e) => { (e.target as HTMLImageElement).src = avatarFallback; }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = avatarFallback;
+                }}
               />
+
               <div>
-                <div className="font-semibold text-sm">{user.name || user.login}</div>
-                <div className="text-xs text-gray-400">@{user.login}</div>
+                <div className="font-semibold text-sm">
+                  {user.name || user.login}
+                </div>
+
+                <div className="text-xs text-gray-400">
+                  @{user.login}
+                </div>
               </div>
             </div>
+
+            {/* Roles */}
             <div className="flex gap-2 mt-3 flex-wrap">
               {roles.isDeveloper && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/30">Developer</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/30">
+                  Developer
+                </span>
               )}
+
               {roles.isReviewer && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-[#8b5cf6]/20 text-[#8b5cf6] border border-[#8b5cf6]/30">Reviewer</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[#8b5cf6]/20 text-[#8b5cf6] border border-[#8b5cf6]/30">
+                  Reviewer
+                </span>
               )}
             </div>
           </div>
 
-          {/* Register Options */}
+          {/* Registration Options */}
           <div className="p-2 border-b border-white/10">
+
+            {/* Developer */}
             {!roles.isDeveloper ? (
               <button
-                onClick={() => { onRegisterDeveloper(); setOpen(false); }}
+                onClick={() => {
+                  onRegisterDeveloper();
+                  setOpen(false);
+                }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#00f0ff]/10 transition-all group text-left"
               >
                 <div className="w-8 h-8 rounded-lg bg-[#00f0ff]/20 flex items-center justify-center group-hover:bg-[#00f0ff]/30 transition-all">
                   <Code2 className="w-4 h-4 text-[#00f0ff]" />
                 </div>
+
                 <div>
-                  <div className="text-sm font-medium">Register as Developer</div>
-                  <div className="text-xs text-gray-400">Submit PRs & earn SBTs</div>
+                  <div className="text-sm font-medium">
+                    Register as Developer
+                  </div>
+
+                  <div className="text-xs text-gray-400">
+                    Submit PRs & earn SBTs
+                  </div>
                 </div>
               </button>
             ) : (
@@ -126,24 +177,40 @@ function ProfileDropdown({
                 <div className="w-8 h-8 rounded-lg bg-[#00f0ff]/10 flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#00f0ff]" />
                 </div>
+
                 <div>
-                  <div className="text-sm font-medium text-[#00f0ff]">Developer ✓</div>
-                  <div className="text-xs text-gray-400">{roles.sbtCount} SBTs earned</div>
+                  <div className="text-sm font-medium text-[#00f0ff]">
+                    Developer ✓
+                  </div>
+
+                  <div className="text-xs text-gray-400">
+                    {roles.sbtCount} SBTs earned
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* Reviewer */}
             {!roles.isReviewer ? (
               <button
-                onClick={() => { onRegisterReviewer(); setOpen(false); }}
+                onClick={() => {
+                  onRegisterReviewer();
+                  setOpen(false);
+                }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#8b5cf6]/10 transition-all group text-left"
               >
                 <div className="w-8 h-8 rounded-lg bg-[#8b5cf6]/20 flex items-center justify-center group-hover:bg-[#8b5cf6]/30 transition-all">
                   <UserCheck className="w-4 h-4 text-[#8b5cf6]" />
                 </div>
+
                 <div>
-                  <div className="text-sm font-medium">Register as Reviewer</div>
-                  <div className="text-xs text-gray-400">Stake & review PRs</div>
+                  <div className="text-sm font-medium">
+                    Register as Reviewer
+                  </div>
+
+                  <div className="text-xs text-gray-400">
+                    Stake & review PRs
+                  </div>
                 </div>
               </button>
             ) : (
@@ -151,26 +218,85 @@ function ProfileDropdown({
                 <div className="w-8 h-8 rounded-lg bg-[#8b5cf6]/10 flex items-center justify-center">
                   <CheckCircle className="w-4 h-4 text-[#8b5cf6]" />
                 </div>
+
                 <div>
-                  <div className="text-sm font-medium text-[#8b5cf6]">Reviewer ✓</div>
-                  <div className="text-xs text-gray-400">Active staker</div>
+                  <div className="text-sm font-medium text-[#8b5cf6]">
+                    Reviewer ✓
+                  </div>
+
+                  <div className="text-xs text-gray-400">
+                    Active staker
+                  </div>
                 </div>
               </div>
             )}
+
+            {/* Wallet Status */}
+            <div className="mt-2 pt-2 border-t border-white/10">
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                    walletConnected
+                      ? "bg-[#10b981]/20"
+                      : "bg-gray-500/10"
+                  }`}
+                >
+                  <Wallet
+                    className={`w-4 h-4 ${
+                      walletConnected
+                        ? "text-[#10b981]"
+                        : "text-gray-400"
+                    }`}
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">
+                    Wallet
+                  </div>
+
+                  {walletConnected && walletAddress ? (
+                    <div
+                      className="text-xs text-[#10b981] truncate"
+                      title={walletAddress}
+                    >
+                      {walletAddress}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400">
+                      Not connected
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Logout */}
           <div className="p-2">
             <button
-              onClick={() => { onLogout(); setOpen(false); }}
+              onClick={() => {
+                onLogout();
+                setOpen(false);
+              }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-500/10 transition-all group text-left"
             >
-              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-all">
+              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
                 <LogOut className="w-4 h-4 text-red-400" />
               </div>
-              <div className="text-sm font-medium text-red-400">Sign Out</div>
+
+              <div>
+                <div className="text-sm font-medium text-red-400">
+                  Logout
+                </div>
+
+                <div className="text-xs text-gray-500">
+                  Disconnect GitHub session
+                </div>
+              </div>
             </button>
           </div>
+
         </div>
       )}
     </div>
@@ -181,6 +307,7 @@ function ProfileDropdown({
 function Navbar() {
   const { user: githubUser, login: githubLogin, logout: githubLogout } = useGitHubAuth();
   const { roles: userRoles, registerDeveloper, registerReviewer } = useUserRoles();
+  const { address, isConnected } = useAccount();
   const location = useLocation();
 
   const navTab = (to: string, label: string, activeColor: string) => {
@@ -246,6 +373,8 @@ function Navbar() {
                 onRegisterDeveloper={registerDeveloper}
                 onRegisterReviewer={registerReviewer}
                 onLogout={githubLogout}
+                walletAddress={address}
+                walletConnected={isConnected}
               />
             )}
             <ConnectWalletButton variant="nav" />
@@ -577,20 +706,26 @@ function LandingPage() {
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden">
       {/* Animated Background */}
-      <div className="fixed inset-0 opacity-20 pointer-events-none">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: "linear-gradient(rgba(0, 240, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 240, 255, 0.1) 1px, transparent 1px)",
-            backgroundSize: "50px 50px",
-          }}
-        />
-      </div>
-      <div className="fixed top-0 left-0 w-[600px] h-[600px] bg-[#00f0ff] opacity-20 blur-[120px] rounded-full -translate-x-1/2 -translate-y-1/2 animate-pulse pointer-events-none" />
-      <div className="fixed bottom-0 right-0 w-[800px] h-[800px] bg-[#8b5cf6] opacity-20 blur-[150px] rounded-full translate-x-1/2 translate-y-1/2 animate-pulse pointer-events-none" style={{ animationDelay: "2s" }} />
-      <div className="fixed top-1/2 left-1/2 w-[500px] h-[500px] bg-[#f92b88] opacity-15 blur-[100px] rounded-full -translate-x-1/2 -translate-y-1/2 animate-pulse pointer-events-none" style={{ animationDelay: "4s" }} />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(0, 240, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 240, 255, 0.1) 1px, transparent 1px)",
+          backgroundSize: "50px 50px",
+        }}
+      />
+
+      <div
+        className="fixed bottom-0 right-0 w-[800px] h-[800px] bg-[#8b5cf6] opacity-20 blur-[150px] rounded-full translate-x-1/2 translate-y-1/2 animate-pulse pointer-events-none"
+        style={{ animationDelay: "2s" }}
+      />
+
+      <div
+        className="fixed top-1/2 left-1/2 w-[500px] h-[500px] bg-[#f92b88] opacity-15 blur-[100px] rounded-full -translate-x-1/2 -translate-y-1/2 animate-pulse pointer-events-none"
+        style={{ animationDelay: "4s" }}
+      />
 
       <Navbar />
 
