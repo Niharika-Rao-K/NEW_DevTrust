@@ -223,25 +223,65 @@ app.post("/webhook", verifySignature, (req, res) => {
     }
 
     if (action === "closed") {
-        const prId = pull_request.number.toString();
-        console.log(`🔍 Processing PR #${prId}`);
+    const prId = pull_request.number.toString();
 
-        const userWallet = extractWallet(pull_request.body);
-        console.log("Extracted Wallet:", userWallet);
+    console.log(`🔄 Processing PR #${prId}`);
 
-        if (!userWallet) {
-            console.log(`⚠️ No wallet found in PR #${prId}`);
-            return res.status(200).send("No wallet");
-        }
+    // Get the GitHub username of the PR author
+    const githubLogin = pull_request.user.login;
 
-        if (pull_request.merged === true) {
-            console.log(`✅ PR #${prId} MERGED`);
-            addToQueue(userWallet, prId, "SUCCESS");
-        } else {
-            console.log(`❌ PR #${prId} CLOSED WITHOUT MERGE`);
-            addToQueue(userWallet, prId, "REJECTED");
-        }
+    console.log("GitHub User:", githubLogin);
+
+    // Look up the wallet registered for this GitHub user
+    let users = [];
+
+    try {
+        users = JSON.parse(
+            fs.readFileSync(USERS_PATH, "utf8")
+        );
+    } catch (error) {
+        console.error("❌ Could not read users.json:", error);
+        return res.status(500).send("User database error");
     }
+
+    const registeredUser = users.find(
+        user =>
+            user.githubLogin.toLowerCase() ===
+            githubLogin.toLowerCase()
+    );
+
+    const userWallet = registeredUser?.walletAddress;
+
+    console.log("Registered Wallet:", userWallet);
+
+    if (!userWallet) {
+        console.log(
+            `⚠️ No wallet registered for GitHub user ${githubLogin}`
+        );
+
+        return res.status(200).send("No registered wallet");
+    }
+
+    if (pull_request.merged === true) {
+        console.log(`✅ PR #${prId} MERGED`);
+
+        addToQueue(
+            userWallet,
+            prId,
+            "SUCCESS"
+        );
+    } else {
+        console.log(
+            `❌ PR #${prId} CLOSED WITHOUT MERGE`
+        );
+
+        addToQueue(
+            userWallet,
+            prId,
+            "REJECTED"
+        );
+    }
+}
 
     res.status(200).send("Webhook Processed");
 });
