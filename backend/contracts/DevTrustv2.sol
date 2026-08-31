@@ -2,47 +2,46 @@
 pragma solidity ^0.8.28;
 
 /**
- * DevTrust
+ * DevTrust v2
  *
  * Decentralized Peer-Staking / Proof-of-Skill MVP
  *
  * Core workflow:
  *
  * Developer
- *    |
- *    | register PR + developer stake
- *    v
- * GitHub PR
- *    |
- *    | reviewers stake + vote
- *    v
+ *      |
+ *      | Register GitHub PR + developer stake
+ *      v
+ * DevTrust PR
+ *      |
+ *      | Reviewers stake ETH + vote
+ *      v
  * Reviewer Consensus
- *    |
- *    | GitHub Oracle confirms merge
- *    v
- * Maintainer / Company
- *    |
- *    | approve / reject
- *    v
+ *      |
+ *      | GitHub Oracle verifies merge
+ *      v
+ * Company / Maintainer
+ *      |
+ *      | Approve / Reject
+ *      v
  * Settlement
- *    |
- *    +--> APPROVED:
- *    |      - developer stake returned
- *    |      - reviewer stakes returned
- *    |      - reviewer reward distributed
- *    |      - developer reputation increased
- *    |      - Soulbound Skill Token minted
- *    |
- *    +--> REJECTED:
- *           - reviewer stakes slashed
- *           - developer gets no SBT
- *           - no reputation reward
  *
- * IMPORTANT:
- * This is an MVP/PoC contract.
- * The GitHub -> blockchain bridge is still performed by the
- * backend/oracle wallet. A production version could replace
- * the centralized oracle with a decentralized oracle system.
+ * APPROVED:
+ *   - Developer stake returned
+ *   - Correct reviewer stakes returned
+ *   - Correct reviewers receive reward
+ *   - Incorrect reviewer stakes are slashed
+ *   - Developer reputation increases
+ *   - Proof-of-Skill SBT minted
+ *
+ * REJECTED:
+ *   - Developer stake returned
+ *   - Reviewer stakes are slashed
+ *   - No reputation reward
+ *   - No SBT
+ *
+ * The GitHub -> blockchain bridge is performed by the
+ * backend/oracle wallet.
  */
 contract DevTrust {
 
@@ -55,12 +54,6 @@ contract DevTrust {
 
     address public owner;
     address public oracle;
-
-    /**
-     * Treasury receives slashed reviewer stakes.
-     *
-     * By default this is the contract owner.
-     */
     address public treasury;
 
     modifier onlyOwner() {
@@ -86,9 +79,13 @@ contract DevTrust {
     //                         EVENTS
     // ============================================================
 
-    event OracleUpdated(address indexed newOracle);
+    event OracleUpdated(
+        address indexed newOracle
+    );
 
-    event TreasuryUpdated(address indexed newTreasury);
+    event TreasuryUpdated(
+        address indexed newTreasury
+    );
 
     event RecordAdded(
         address indexed user,
@@ -186,16 +183,37 @@ contract DevTrust {
         uint256 amount
     );
 
+    event Transfer(
+        address indexed from,
+        address indexed to,
+        uint256 indexed tokenId
+    );
+
+
+    // ============================================================
+    //                    CONSTRUCTOR
+    // ============================================================
+
+    constructor(
+        string memory _trustName
+    ) {
+        trustName = _trustName;
+        creationTime = block.timestamp;
+
+        owner = msg.sender;
+        oracle = msg.sender;
+        treasury = msg.sender;
+    }
+
 
     // ============================================================
     //                    LEGACY RECORD SYSTEM
     // ============================================================
 
     /**
-     * Kept from your original contract.
+     * Kept for compatibility with the original contract.
      *
-     * These records can be used for simple on-chain achievement
-     * metadata / historical records.
+     * This is separate from the PR staking workflow.
      */
     struct TrustRecord {
         address user;
@@ -208,9 +226,14 @@ contract DevTrust {
     function addRecord(
         address _user,
         string calldata _data
-    ) external onlyOwnerOrOracle {
-
-        require(_user != address(0), "Invalid user");
+    )
+        external
+        onlyOwnerOrOracle
+    {
+        require(
+            _user != address(0),
+            "Invalid user"
+        );
 
         records.push(
             TrustRecord({
@@ -238,9 +261,13 @@ contract DevTrust {
             uint256 timestamp
         )
     {
-        require(index < records.length, "Invalid index");
+        require(
+            index < records.length,
+            "Invalid index"
+        );
 
-        TrustRecord storage record = records[index];
+        TrustRecord storage record =
+            records[index];
 
         return (
             record.user,
@@ -273,24 +300,21 @@ contract DevTrust {
 
 
     // ============================================================
-    //                     GENERIC PLATFORM STAKE
+    //                  GENERIC PLATFORM STAKE
     // ============================================================
 
     /**
-     * Generic stake mapping retained from your old contract.
+     * Legacy/general platform stake.
+ *
+     * This is NOT reviewer stake for a PR.
      *
-     * This is NOT the reviewer stake for a PR.
-     *
-     * PR-specific staking uses:
-     *
-     *     stakeOnPR()
+     * PR-specific reviewer staking uses stakeOnPR().
      */
-    mapping(address => uint256) public stakes;
+    mapping(address => uint256)
+        public stakes;
 
-    /**
-     * Minimum generic platform stake.
-     */
-    uint256 public constant MIN_PLATFORM_STAKE = 0.001 ether;
+    uint256 public constant MIN_PLATFORM_STAKE =
+        0.001 ether;
 
     function stake()
         external
@@ -324,9 +348,6 @@ contract DevTrust {
     //                       PR SYSTEM
     // ============================================================
 
-    /**
-     * PR lifecycle.
-     */
     enum PRStatus {
         NONE,
         OPEN,
@@ -336,110 +357,69 @@ contract DevTrust {
         SETTLED
     }
 
-    /**
-     * A Pull Request registered in DevTrust.
-     */
     struct PullRequest {
 
-        // Unique DevTrust PR ID
         uint256 id;
 
-        // GitHub repository
-        // Example:
-        // "owner/repository"
         string repository;
 
-        // GitHub PR number
         uint256 prNumber;
 
-        // Full GitHub PR URL
         string prUrl;
 
-        // Developer who submitted the contribution
         address developer;
 
-        // Developer's ETH commitment
         uint256 developerStake;
 
-        // ETH reserved for reviewer rewards
         uint256 reviewerRewardPool;
 
-        // Amount of reviewer stake currently locked
         uint256 totalReviewerStake;
 
-        // Number of reviewers
         uint256 reviewerCount;
 
-        // Current state
         PRStatus status;
 
-        // Address of the company/project maintainer
         address company;
 
-        // When PR was registered
         uint256 createdAt;
 
-        // When merge was verified
         uint256 mergedAt;
 
-        // Challenge period deadline
         uint256 challengeDeadline;
 
-        // GitHub merge commit
         string mergeCommit;
 
-        // Whether settlement has happened
         bool settled;
     }
 
-    /**
-     * Every PR gets a unique DevTrust ID.
-     */
     uint256 public nextPRId = 1;
 
-    /**
-     * PR ID => PullRequest
-     */
-    mapping(uint256 => PullRequest) public pullRequests;
+    mapping(uint256 => PullRequest)
+        public pullRequests;
 
 
     // ============================================================
-    //                      REVIEW SYSTEM
+    //                       REVIEW SYSTEM
     // ============================================================
 
-    /**
-     * Reviewer information for one PR.
-     */
     struct Review {
 
-        // Reviewer wallet
         address reviewer;
 
-        // ETH locked by reviewer
         uint256 stake;
 
-        // true  = reviewer predicts successful contribution
-        // false = reviewer predicts bad contribution
         bool approveVote;
 
-        // Prevents duplicate settlement
         bool settled;
 
-        // Prevents accidental duplicate reviews
         bool exists;
     }
 
-    /**
-     * PR ID => reviewer address => Review
-     */
-    mapping(uint256 => mapping(address => Review))
+    mapping(
+        uint256 => mapping(address => Review)
+    )
         public reviews;
 
-    /**
-     * PR ID => reviewer addresses
-     *
-     * Used for settlement.
-     */
     mapping(uint256 => address[])
         private reviewerList;
 
@@ -448,60 +428,23 @@ contract DevTrust {
     //                     CONFIGURATION
     // ============================================================
 
-    /**
-     * Minimum developer stake required for a PR.
-     */
     uint256 public constant MIN_DEVELOPER_STAKE =
         0.001 ether;
 
-    /**
-     * Minimum reviewer stake.
-     */
     uint256 public constant MIN_REVIEWER_STAKE =
         0.001 ether;
 
-    /**
-     * Challenge period.
-     *
-     * For your demo you can set this to a small value.
-     *
-     * Current value:
-     * 1 day
-     *
-     * Production could use 7 days.
-     */
     uint256 public challengePeriod =
         1 days;
 
-    /**
-     * Reviewer reward percentage.
-     *
-     * Example:
-     *
-     * reviewerRewardPool = 0.01 ETH
-     *
-     * 10% is NOT deducted from the reviewer stake.
-     *
-     * The reward pool is separate ETH deposited by the company.
-     *
-     * Each successful reviewer receives a proportional share.
-     */
-    uint256 public constant MAX_REVIEWERS = 50;
+    uint256 public constant MAX_REVIEWERS =
+        50;
 
 
     // ============================================================
-    //                     REPUTATION SYSTEM
+    //                     REPUTATION
     // ============================================================
 
-    /**
-     * Developer reputation.
-     *
-     * This is a simple MVP reputation score.
-     *
-     * Every successfully verified PR:
-     *
-     *     +100 reputation
-     */
     mapping(address => uint256)
         public reputation;
 
@@ -513,63 +456,28 @@ contract DevTrust {
     //                  SOULBOUND TOKEN SYSTEM
     // ============================================================
 
-    /**
-     * Minimal SBT implementation.
-     *
-     * These tokens cannot be transferred.
-     *
-     * They are minted only for successful DevTrust
-     * contributions.
-     */
     string public constant SBT_NAME =
         "DevTrust Proof of Skill";
 
     string public constant SBT_SYMBOL =
         "DTS";
 
-    /**
-     * Token counter.
-     */
     uint256 public nextTokenId = 1;
 
-    /**
-     * tokenId => owner
-     */
     mapping(uint256 => address)
         private sbtOwner;
 
-    /**
-     * owner => balance
-     */
     mapping(address => uint256)
         private sbtBalance;
 
-    /**
-     * tokenId => PR ID
-     *
-     * Allows anyone to determine which contribution
-     * generated a particular SBT.
-     */
     mapping(uint256 => uint256)
         public tokenPR;
 
-    /**
-     * tokenId => developer
-     */
     mapping(uint256 => address)
         public tokenDeveloper;
 
-    /**
-     * developer => token IDs
-     */
     mapping(address => uint256[])
         private developerTokens;
-
-    event Transfer(
-        address indexed from,
-        address indexed to,
-        uint256 indexed tokenId
-    );
 
 
     // ============================================================
@@ -577,26 +485,19 @@ contract DevTrust {
     // ============================================================
 
     /**
-     * @notice Register a GitHub PR in DevTrust.
+     * Developer registers a GitHub PR.
      *
-     * The developer sends ETH with this transaction.
+     * msg.value consists of:
      *
-     * The company/project can also fund a reviewer reward pool.
+     * developer stake
+     * +
+     * reviewer reward pool
      *
      * Example:
      *
-     * Developer:
-     *     0.01 ETH developer stake
-     *
-     * Company:
-     *     0.02 ETH reviewer reward pool
-     *
-     * For the MVP, the developer calls this function and
-     * sends:
-     *
-     *     developerStake + reviewerRewardPool
-     *
-     * The backend/frontend can make this easy for the user.
+     * Developer stake = 0.01 ETH
+     * Reward pool     = 0.02 ETH
+     * Total sent      = 0.03 ETH
      */
     function registerPR(
         string calldata repository,
@@ -637,14 +538,17 @@ contract DevTrust {
         );
 
         uint256 developerStake =
-            msg.value - reviewerRewardPool;
+            msg.value -
+            reviewerRewardPool;
 
         require(
-            developerStake >= MIN_DEVELOPER_STAKE,
+            developerStake >=
+                MIN_DEVELOPER_STAKE,
             "Developer stake too small"
         );
 
-        uint256 prId = nextPRId++;
+        uint256 prId =
+            nextPRId++;
 
         pullRequests[prId] = PullRequest({
             id: prId,
@@ -689,14 +593,10 @@ contract DevTrust {
     // ============================================================
 
     /**
-     * @notice Reviewer stakes ETH and votes on a PR.
+     * Reviewer stakes ETH and votes on the PR.
      *
-     * approveVote:
-     *
-     *     true  -> reviewer says "this contribution is good"
-     *     false -> reviewer says "this contribution is bad"
-     *
-     * The reviewer must put ETH behind their opinion.
+     * true  = reviewer believes contribution deserves approval
+     * false = reviewer believes contribution should be rejected
      */
     function stakeOnPR(
         uint256 prId,
@@ -716,11 +616,6 @@ contract DevTrust {
         require(
             msg.sender != pr.developer,
             "Developer cannot review own PR"
-        );
-
-        require(
-            msg.sender != address(0),
-            "Invalid reviewer"
         );
 
         require(
@@ -763,7 +658,7 @@ contract DevTrust {
 
 
     // ============================================================
-    //                    REVIEWER INFORMATION
+    //                  REVIEWER INFORMATION
     // ============================================================
 
     function getReview(
@@ -824,15 +719,11 @@ contract DevTrust {
     // ============================================================
 
     /**
-     * @notice Backend/oracle tells the contract that GitHub
-     *         confirms the PR was merged.
+     * Backend/oracle confirms that GitHub merged the PR.
      *
-     * The oracle DOES NOT decide whether the contribution
-     * deserves the final reward.
+     * The oracle only verifies the GitHub fact.
      *
-     * It only provides the external GitHub fact:
-     *
-     *     "This PR was merged."
+     * It does NOT make the final company decision.
      */
     function verifyPRMerged(
         uint256 prId,
@@ -854,7 +745,8 @@ contract DevTrust {
             "Merge commit required"
         );
 
-        pr.status = PRStatus.MERGED;
+        pr.status =
+            PRStatus.MERGED;
 
         pr.mergedAt =
             block.timestamp;
@@ -879,15 +771,7 @@ contract DevTrust {
     // ============================================================
 
     /**
-     * @notice Company/project maintainer approves the PR.
-     *
-     * This is the final positive decision.
-     *
-     * Requirements:
-     *
-     *     1. PR must have been merged.
-     *     2. Challenge period must have passed.
-     *     3. Caller must be the company assigned to this PR.
+     * Company approves a merged PR.
      */
     function approvePR(
         uint256 prId
@@ -924,23 +808,7 @@ contract DevTrust {
 
 
     /**
-     * @notice Company/project maintainer rejects the PR.
-     *
-     * A rejection means the reviewers who supported the
-     * contribution lose their stake.
-     *
-     * For the MVP, the company can reject after GitHub
-     * has confirmed the PR was merged.
-     *
-     * This allows the project to demonstrate both:
-     *
-     *     APPROVED
-     *
-     * and
-     *
-     *     REJECTED
-     *
-     * outcomes.
+     * Company rejects a merged PR.
      */
     function rejectPR(
         uint256 prId
@@ -981,14 +849,11 @@ contract DevTrust {
     // ============================================================
 
     /**
-     * @notice Settle an approved or rejected PR.
+     * Final settlement entry point.
      *
-     * Anyone can trigger settlement once the company has
-     * made the final decision.
-     *
-     * This is deliberately permissionless.
-     *
-     * The caller does NOT receive the funds.
+     * The large settlement logic is intentionally split into
+     * smaller internal functions to avoid Solidity stack-depth
+     * problems.
      */
     function settlePR(
         uint256 prId
@@ -1009,13 +874,8 @@ contract DevTrust {
             "Already settled"
         );
 
-        pr.settled = true;
-
         bool approved =
             pr.status == PRStatus.APPROVED;
-
-        address developer =
-            pr.developer;
 
         uint256 reviewerCount =
             reviewerList[prId].length;
@@ -1023,297 +883,16 @@ contract DevTrust {
         uint256 totalReviewerStake =
             pr.totalReviewerStake;
 
-
-        // ========================================================
-        //                    APPROVED CASE
-        // ========================================================
+        pr.settled = true;
 
         if (approved) {
-
-            /**
-             * Return developer stake.
-             */
-            if (pr.developerStake > 0) {
-
-                uint256 developerStake =
-                    pr.developerStake;
-
-                pr.developerStake = 0;
-
-                (bool developerPaid,) =
-                    payable(developer).call{
-                        value: developerStake
-                    }("");
-
-                require(
-                    developerPaid,
-                    "Developer payment failed"
-                );
-
-                emit DeveloperStakeReturned(
-                    prId,
-                    developer,
-                    developerStake
-                );
-            }
-
-
-            /**
-             * Count approving reviewers.
-             */
-            uint256 approvingReviewers = 0;
-
-            for (
-                uint256 i = 0;
-                i < reviewerCount;
-                i++
-            ) {
-
-                address reviewer =
-                    reviewerList[prId][i];
-
-                Review storage review =
-                    reviews[prId][reviewer];
-
-                if (review.approveVote) {
-                    approvingReviewers++;
-                }
-            }
-
-
-            /**
-             * Reward pool is distributed only among
-             * reviewers who voted correctly.
-             *
-             * Their original stake is also returned.
-             */
-            uint256 rewardPool =
-                pr.reviewerRewardPool;
-
-            uint256 rewardPerReviewer = 0;
-
-            if (
-                approvingReviewers > 0 &&
-                rewardPool > 0
-            ) {
-                rewardPerReviewer =
-                    rewardPool /
-                    approvingReviewers;
-            }
-
-
-            /**
-             * Settle every reviewer.
-             */
-            for (
-                uint256 i = 0;
-                i < reviewerCount;
-                i++
-            ) {
-
-                address reviewer =
-                    reviewerList[prId][i];
-
-                Review storage review =
-                    reviews[prId][reviewer];
-
-                if (review.settled) {
-                    continue;
-                }
-
-                review.settled = true;
-
-                if (review.approveVote) {
-
-                    uint256 reviewerStake =
-                        review.stake;
-
-                    uint256 reward =
-                        rewardPerReviewer;
-
-                    review.stake = 0;
-
-                    /**
-                     * Return stake + reward.
-                     */
-                    (bool paid,) =
-                        payable(reviewer).call{
-                            value:
-                                reviewerStake +
-                                reward
-                        }("");
-
-                    require(
-                        paid,
-                        "Reviewer payment failed"
-                    );
-
-                    emit ReviewerRewarded(
-                        prId,
-                        reviewer,
-                        reviewerStake,
-                        reward
-                    );
-
-                } else {
-
-                    /**
-                     * Reviewer's prediction was wrong.
-                     *
-                     * Their stake is sent to treasury.
-                     */
-                    uint256 slashAmount =
-                        review.stake;
-
-                    review.stake = 0;
-
-                    (bool slashed,) =
-                        payable(treasury).call{
-                            value: slashAmount
-                        }("");
-
-                    require(
-                        slashed,
-                        "Slash transfer failed"
-                    );
-
-                    emit ReviewerSlashed(
-                        prId,
-                        reviewer,
-                        slashAmount
-                    );
-                }
-            }
-
-
-            /**
-             * Reviewer reward pool has now been consumed.
-             */
-            pr.reviewerRewardPool = 0;
-
-
-            /**
-             * Increase developer reputation.
-             */
-            reputation[developer] +=
-                REPUTATION_PER_SUCCESS;
-
-            emit DeveloperReputationUpdated(
-                developer,
-                reputation[developer]
-            );
-
-
-            /**
-             * Mint Proof of Skill SBT.
-             */
-            _mintSkillSBT(
-                developer,
-                prId
-            );
+            _settleApprovedPR(prId);
+        } else {
+            _settleRejectedPR(prId);
         }
 
-
-        // ========================================================
-        //                    REJECTED CASE
-        // ========================================================
-
-        else {
-
-            /**
-             * Developer gets their original stake back.
-             *
-             * The project can later be modified so that
-             * developer stake is also slashed if desired.
-             *
-             * For the current project idea, the economic
-             * penalty is focused on dishonest/wrong reviewers.
-             */
-            if (pr.developerStake > 0) {
-
-                uint256 developerStake =
-                    pr.developerStake;
-
-                pr.developerStake = 0;
-
-                (bool developerPaid,) =
-                    payable(developer).call{
-                        value: developerStake
-                    }("");
-
-                require(
-                    developerPaid,
-                    "Developer refund failed"
-                );
-
-                emit DeveloperStakeReturned(
-                    prId,
-                    developer,
-                    developerStake
-                );
-            }
-
-
-            /**
-             * Every reviewer loses their stake.
-             */
-            for (
-                uint256 i = 0;
-                i < reviewerCount;
-                i++
-            ) {
-
-                address reviewer =
-                    reviewerList[prId][i];
-
-                Review storage review =
-                    reviews[prId][reviewer];
-
-                if (review.settled) {
-                    continue;
-                }
-
-                review.settled = true;
-
-                uint256 slashAmount =
-                    review.stake;
-
-                review.stake = 0;
-
-                if (slashAmount > 0) {
-
-                    (bool slashed,) =
-                        payable(treasury).call{
-                            value: slashAmount
-                        }("");
-
-                    require(
-                        slashed,
-                        "Slash transfer failed"
-                    );
-
-                    emit ReviewerSlashed(
-                        prId,
-                        reviewer,
-                        slashAmount
-                    );
-                }
-            }
-
-
-            /**
-             * No reviewer reward is paid after rejection.
-             */
-            pr.reviewerRewardPool = 0;
-        }
-
-
-        /**
-         * Final state.
-         */
         pr.status =
             PRStatus.SETTLED;
-
 
         emit PRSettled(
             prId,
@@ -1325,14 +904,326 @@ contract DevTrust {
 
 
     // ============================================================
+    //                 APPROVED PR SETTLEMENT
+    // ============================================================
+
+    function _settleApprovedPR(
+        uint256 prId
+    )
+        internal
+    {
+        PullRequest storage pr =
+            pullRequests[prId];
+
+        address developer =
+            pr.developer;
+
+        // Return developer's stake.
+        _returnDeveloperStake(
+            prId
+        );
+
+        // Count reviewers who voted approve.
+        uint256 approvingReviewers =
+            _countApprovingReviewers(
+                prId
+            );
+
+        uint256 rewardPerReviewer = 0;
+
+        if (
+            approvingReviewers > 0 &&
+            pr.reviewerRewardPool > 0
+        ) {
+            rewardPerReviewer =
+                pr.reviewerRewardPool /
+                approvingReviewers;
+        }
+
+        // Settle reviewers.
+        _settleApprovedReviewers(
+            prId,
+            rewardPerReviewer
+        );
+
+        // Reward pool is consumed.
+        pr.reviewerRewardPool = 0;
+
+        // Increase reputation.
+        reputation[developer] +=
+            REPUTATION_PER_SUCCESS;
+
+        emit DeveloperReputationUpdated(
+            developer,
+            reputation[developer]
+        );
+
+        // Mint Proof-of-Skill SBT.
+        _mintSkillSBT(
+            developer,
+            prId
+        );
+    }
+
+
+    // ============================================================
+    //                REJECTED PR SETTLEMENT
+    // ============================================================
+
+    function _settleRejectedPR(
+        uint256 prId
+    )
+        internal
+    {
+        PullRequest storage pr =
+            pullRequests[prId];
+
+        // Return developer stake.
+        _returnDeveloperStake(
+            prId
+        );
+
+        // Slash every reviewer.
+        address[] storage reviewers =
+            reviewerList[prId];
+
+        for (
+            uint256 i = 0;
+            i < reviewers.length;
+            i++
+        ) {
+            address reviewer =
+                reviewers[i];
+
+            Review storage review =
+                reviews[prId][reviewer];
+
+            if (review.settled) {
+                continue;
+            }
+
+            review.settled = true;
+
+            _slashReviewer(
+                prId,
+                reviewer,
+                review
+            );
+        }
+
+        // No reward is paid after rejection.
+        pr.reviewerRewardPool = 0;
+    }
+
+
+    // ============================================================
+    //              COUNT APPROVING REVIEWERS
+    // ============================================================
+
+    function _countApprovingReviewers(
+        uint256 prId
+    )
+        internal
+        view
+        returns (uint256 count)
+    {
+        address[] storage reviewers =
+            reviewerList[prId];
+
+        for (
+            uint256 i = 0;
+            i < reviewers.length;
+            i++
+        ) {
+            if (
+                reviews[prId][reviewers[i]]
+                    .approveVote
+            ) {
+                count++;
+            }
+        }
+    }
+
+
+    // ============================================================
+    //              SETTLE APPROVED REVIEWERS
+    // ============================================================
+
+    function _settleApprovedReviewers(
+        uint256 prId,
+        uint256 rewardPerReviewer
+    )
+        internal
+    {
+        address[] storage reviewers =
+            reviewerList[prId];
+
+        for (
+            uint256 i = 0;
+            i < reviewers.length;
+            i++
+        ) {
+            address reviewer =
+                reviewers[i];
+
+            Review storage review =
+                reviews[prId][reviewer];
+
+            if (review.settled) {
+                continue;
+            }
+
+            review.settled = true;
+
+            if (review.approveVote) {
+
+                _returnReviewerStakeAndReward(
+                    prId,
+                    reviewer,
+                    review,
+                    rewardPerReviewer
+                );
+
+            } else {
+
+                _slashReviewer(
+                    prId,
+                    reviewer,
+                    review
+                );
+            }
+        }
+    }
+
+
+    // ============================================================
+    //              RETURN DEVELOPER STAKE
+    // ============================================================
+
+    function _returnDeveloperStake(
+        uint256 prId
+    )
+        internal
+    {
+        PullRequest storage pr =
+            pullRequests[prId];
+
+        uint256 amount =
+            pr.developerStake;
+
+        if (amount == 0) {
+            return;
+        }
+
+        address developer =
+            pr.developer;
+
+        pr.developerStake = 0;
+
+        (bool paid,) =
+            payable(developer).call{
+                value: amount
+            }("");
+
+        require(
+            paid,
+            "Developer payment failed"
+        );
+
+        emit DeveloperStakeReturned(
+            prId,
+            developer,
+            amount
+        );
+    }
+
+
+    // ============================================================
+    //            RETURN REVIEWER STAKE + REWARD
+    // ============================================================
+
+    function _returnReviewerStakeAndReward(
+        uint256 prId,
+        address reviewer,
+        Review storage review,
+        uint256 reward
+    )
+        internal
+    {
+        uint256 stakeAmount =
+            review.stake;
+
+        review.stake = 0;
+
+        uint256 total =
+            stakeAmount +
+            reward;
+
+        (bool paid,) =
+            payable(reviewer).call{
+                value: total
+            }("");
+
+        require(
+            paid,
+            "Reviewer payment failed"
+        );
+
+        emit ReviewerRewarded(
+            prId,
+            reviewer,
+            stakeAmount,
+            reward
+        );
+    }
+
+
+    // ============================================================
+    //                    SLASH REVIEWER
+    // ============================================================
+
+    function _slashReviewer(
+        uint256 prId,
+        address reviewer,
+        Review storage review
+    )
+        internal
+    {
+        uint256 amount =
+            review.stake;
+
+        review.stake = 0;
+
+        if (amount == 0) {
+            return;
+        }
+
+        (bool paid,) =
+            payable(treasury).call{
+                value: amount
+            }("");
+
+        require(
+            paid,
+            "Slash transfer failed"
+        );
+
+        emit ReviewerSlashed(
+            prId,
+            reviewer,
+            amount
+        );
+    }
+
+
+    // ============================================================
     //                    SBT IMPLEMENTATION
     // ============================================================
 
     /**
-     * @notice Mint a non-transferable Proof of Skill token.
+     * Mint a non-transferable Proof-of-Skill token.
      *
-     * Only this contract's internal settlement logic can
-     * create one.
+     * Only internal settlement logic can call this.
      */
     function _mintSkillSBT(
         address developer,
@@ -1372,9 +1263,10 @@ contract DevTrust {
     }
 
 
-    /**
-     * Standard-style ownerOf.
-     */
+    // ============================================================
+    //                       SBT GETTERS
+    // ============================================================
+
     function ownerOf(
         uint256 tokenId
     )
@@ -1393,10 +1285,6 @@ contract DevTrust {
         return tokenOwner;
     }
 
-
-    /**
-     * Standard-style balanceOf.
-     */
     function balanceOf(
         address account
     )
@@ -1412,10 +1300,6 @@ contract DevTrust {
         return sbtBalance[account];
     }
 
-
-    /**
-     * Get all SBT IDs owned by a developer.
-     */
     function getDeveloperTokens(
         address developer
     )
@@ -1426,13 +1310,6 @@ contract DevTrust {
         return developerTokens[developer];
     }
 
-
-    /**
-     * Returns SBT metadata information.
-     *
-     * For this MVP we keep metadata directly associated
-     * with the PR ID.
-     */
     function getSBTInfo(
         uint256 tokenId
     )
@@ -1448,13 +1325,13 @@ contract DevTrust {
         developer =
             tokenDeveloper[tokenId];
 
-        prId =
-            tokenPR[tokenId];
-
         require(
             developer != address(0),
             "SBT does not exist"
         );
+
+        prId =
+            tokenPR[tokenId];
 
         PullRequest storage pr =
             pullRequests[prId];
@@ -1468,31 +1345,16 @@ contract DevTrust {
 
 
     // ============================================================
-    //             SOULBOUND / NON-TRANSFERABILITY
-    // ============================================================
-
-    /**
-     * There is intentionally NO transfer function.
-     *
-     * Therefore the SBT cannot be transferred.
-     *
-     * The only movement supported is:
-     *
-     *     address(0) -> developer
-     *
-     * during minting.
-     *
-     * There is also no approve() or setApprovalForAll().
-     *
-     * This makes the token effectively soulbound.
-     */
-
-
-    // ============================================================
     //                  PR VIEW FUNCTIONS
     // ============================================================
 
-    function getPR(
+    /**
+     * Basic PR information.
+     *
+     * Split into smaller getters rather than returning a huge
+     * 16-value tuple from one function.
+     */
+    function getPRBasic(
         uint256 prId
     )
         external
@@ -1503,17 +1365,7 @@ contract DevTrust {
             uint256 prNumber,
             string memory prUrl,
             address developer,
-            uint256 developerStake,
-            uint256 reviewerRewardPool,
-            uint256 totalReviewerStake,
-            uint256 reviewerCount,
-            PRStatus status,
-            address company,
-            uint256 createdAt,
-            uint256 mergedAt,
-            uint256 challengeDeadline,
-            string memory mergeCommit,
-            bool settled
+            address company
         )
     {
         PullRequest storage pr =
@@ -1525,17 +1377,113 @@ contract DevTrust {
             pr.prNumber,
             pr.prUrl,
             pr.developer,
+            pr.company
+        );
+    }
+
+
+    /**
+     * PR staking information.
+     */
+    function getPRStaking(
+        uint256 prId
+    )
+        external
+        view
+        returns (
+            uint256 developerStake,
+            uint256 reviewerRewardPool,
+            uint256 totalReviewerStake,
+            uint256 reviewerCount
+        )
+    {
+        PullRequest storage pr =
+            pullRequests[prId];
+
+        return (
             pr.developerStake,
             pr.reviewerRewardPool,
             pr.totalReviewerStake,
-            pr.reviewerCount,
+            pr.reviewerCount
+        );
+    }
+
+
+    /**
+     * PR lifecycle/status information.
+     */
+    function getPRStatus(
+        uint256 prId
+    )
+        external
+        view
+        returns (
+            PRStatus status,
+            uint256 createdAt,
+            uint256 mergedAt,
+            uint256 challengeDeadline,
+            bool settled
+        )
+    {
+        PullRequest storage pr =
+            pullRequests[prId];
+
+        return (
             pr.status,
-            pr.company,
             pr.createdAt,
             pr.mergedAt,
             pr.challengeDeadline,
-            pr.mergeCommit,
             pr.settled
+        );
+    }
+
+
+    /**
+     * GitHub merge information.
+     */
+    function getPRMergeInfo(
+        uint256 prId
+    )
+        external
+        view
+        returns (
+            string memory repository,
+            uint256 prNumber,
+            string memory prUrl,
+            string memory mergeCommit
+        )
+    {
+        PullRequest storage pr =
+            pullRequests[prId];
+
+        return (
+            pr.repository,
+            pr.prNumber,
+            pr.prUrl,
+            pr.mergeCommit
+        );
+    }
+
+
+    /**
+     * Convenience getter for developer/company.
+     */
+    function getPRParticipants(
+        uint256 prId
+    )
+        external
+        view
+        returns (
+            address developer,
+            address company
+        )
+    {
+        PullRequest storage pr =
+            pullRequests[prId];
+
+        return (
+            pr.developer,
+            pr.company
         );
     }
 
@@ -1544,9 +1492,6 @@ contract DevTrust {
     //                     ADMIN FUNCTIONS
     // ============================================================
 
-    /**
-     * Change oracle wallet.
-     */
     function setOracle(
         address newOracle
     )
@@ -1567,9 +1512,6 @@ contract DevTrust {
     }
 
 
-    /**
-     * Change treasury.
-     */
     function setTreasury(
         address newTreasury
     )
@@ -1594,8 +1536,6 @@ contract DevTrust {
      * Change challenge period.
      *
      * Only affects PRs registered after the change.
-     *
-     * Existing PRs retain their own deadline.
      */
     function setChallengePeriod(
         uint256 newPeriod
@@ -1613,13 +1553,18 @@ contract DevTrust {
     }
 
 
+    // ============================================================
+    //                  EMERGENCY WITHDRAW
+    // ============================================================
+
     /**
      * Emergency owner withdrawal.
      *
-     * This should only be used for ETH that is NOT
-     * locked inside active PRs.
+     * Do NOT use this during a live PR settlement.
      *
-     * For the MVP, avoid using this during a live demo.
+     * In a production contract this should be replaced with
+     * accounting that prevents withdrawal of funds belonging
+     * to active PRs.
      */
     function emergencyWithdraw(
         uint256 amount
@@ -1649,14 +1594,9 @@ contract DevTrust {
     // ============================================================
 
     /**
-     * Kept for compatibility with your old backend.
+     * Legacy compatibility function.
      *
-     * IMPORTANT:
-     * New DevTrust PR workflow should use:
-     *
-     *     settlePR()
-     *
-     * rather than these functions.
+     * New PR workflow should use settlePR().
      */
     function slash(
         address developer
@@ -1694,7 +1634,7 @@ contract DevTrust {
     /**
      * Legacy direct reward function.
      *
-     * New PR settlement should use settlePR().
+     * New PR workflow should use settlePR().
      */
     function reward(
         address developer
@@ -1737,12 +1677,13 @@ contract DevTrust {
     /**
      * Allows the contract to receive ETH directly.
      *
-     * Do not use direct transfers for PR staking.
-     * Use registerPR() or stakeOnPR().
+     * PR staking should use:
+     *
+     * registerPR()
+     * stakeOnPR()
      */
     receive()
         external
         payable
     {}
 }
-
