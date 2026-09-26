@@ -53,11 +53,11 @@ const DB_PATH = path.join(__dirname, "db.json");
 const USERS_PATH = path.join(__dirname, "users.json");
 
 // ============================================================
-// DEVTRUST V2 ABI
+// DEVTRUST V3 ABI
 // ============================================================
 
-const DEVTRUST_V2_ABI = [
-    // Constructor/read functions
+const DEVTRUST_V3_ABI = [
+    // Contract reads
     "function trustName() view returns (string)",
     "function owner() view returns (address)",
     "function oracle() view returns (address)",
@@ -66,7 +66,7 @@ const DEVTRUST_V2_ABI = [
     "function nextPRId() view returns (uint256)",
 
     // PR registration
-    "function registerPR(string repository,uint256 prNumber,string prUrl,address company,uint256 reviewerRewardPool) payable returns (uint256)",
+    "function registerPR(string repository,uint256 prNumber,string prUrl,address company,uint256 reviewerRewardPool,uint256 minReviewerStake) payable returns (uint256)",
 
     // Reviewer staking
     "function stakeOnPR(uint256 prId,bool approveVote) payable",
@@ -87,6 +87,11 @@ const DEVTRUST_V2_ABI = [
     "function getPRStatus(uint256 prId) view returns (uint8,bool)",
     "function getPRMergeInfo(uint256 prId) view returns (uint256,uint256,string)",
 
+    // V3 testing eligibility
+    "function getPRThreshold(uint256 prId) view returns (uint256,bool)",
+    "function isEligibleForTesting(uint256 prId) view returns (bool)",
+    "function getTestingEligibility(uint256 prId) view returns (uint256,uint256,bool)",
+
     // Reviewer reads
     "function getReview(uint256 prId,address reviewer) view returns (address,uint256,bool,bool,bool)",
     "function getReviewerCount(uint256 prId) view returns (uint256)",
@@ -94,7 +99,7 @@ const DEVTRUST_V2_ABI = [
 
     // Reputation / SBT
     "function getDeveloperReputation(address developer) view returns (uint256)",
-    "function getSBTInfo(address developer) view returns (uint256,string,string)",
+    "function getSBTInfo(uint256 tokenId) view returns (uint256,address,uint256)",
 ];
 
 // ============================================================
@@ -135,11 +140,11 @@ const oracleWallet = new ethers.Wallet(
 
 const contract = new ethers.Contract(
     process.env.CONTRACT_ADDRESS,
-    DEVTRUST_V2_ABI,
+    DEVTRUST_V3_ABI,
     oracleWallet
 );
 
-console.log("DevTrust v2 configuration loaded.");
+console.log("DevTrust v3 configuration loaded.");
 console.log("Contract:", process.env.CONTRACT_ADDRESS);
 console.log("Oracle wallet:", oracleWallet.address);
 
@@ -631,7 +636,7 @@ app.post(
         // --------------------------------------------------------
         //
         // A PR closed without merging is NOT automatically
-        // rejected on-chain. The v2 contract requires the
+        // rejected on-chain. The v3 contract requires the
         // company/maintainer to make the final approve/reject
         // decision after the challenge period.
         // --------------------------------------------------------
@@ -667,7 +672,7 @@ app.post(
             );
 
             // No blockchain transaction is triggered here.
-            // Company rejection remains a separate v2 action.
+            // Company rejection remains a separate v3 action.
         }
 
         return res
@@ -906,7 +911,7 @@ app.get("/", async (req, res) => {
         res.json({
             service:
                 "DevTrust Backend",
-            version: "2",
+            version: "3",
             status: "running",
 
             contract:
@@ -925,7 +930,7 @@ app.get("/", async (req, res) => {
         res.status(500).json({
             service:
                 "DevTrust Backend",
-            version: "2",
+            version: "3",
             status:
                 "blockchain connection failed",
             error:
@@ -1117,7 +1122,7 @@ initializeDatabase()
                 "========================================"
             );
             console.log(
-                "DevTrust Backend v2"
+                "DevTrust Backend v3"
             );
             console.log(
                 "========================================"
