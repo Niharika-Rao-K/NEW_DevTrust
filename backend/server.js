@@ -73,7 +73,7 @@ const DEVTRUST_V2_ABI = [
     "function settlePR(uint256 prId)",
 
     // PR reads
-    "function getPRBasic(uint256 prId) view returns (uint256,string,uint256,string,address,uint256,uint256,uint256,uint256,uint8,address)",
+    "function getPRBasic(uint256 prId) view returns (uint256,string,uint256,string,address,address)",
     "function getPRStaking(uint256 prId) view returns (uint256,uint256)",
     "function getPRStatus(uint256 prId) view returns (uint8,bool)",
     "function getPRMergeInfo(uint256 prId) view returns (uint256,uint256,string)",
@@ -772,10 +772,9 @@ app.get("/api/pr", async (req, res) => {
             });
         }
 
-        return res.json({
-            prId: result.prId,
-            data: result.data,
-        });
+        return res.json(JSON.parse(JSON.stringify(result, (_, value) =>
+    typeof value === "bigint" ? value.toString() : value
+)));
     } catch (error) {
         console.error(
             "PR lookup error:",
