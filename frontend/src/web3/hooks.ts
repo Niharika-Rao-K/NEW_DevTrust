@@ -1,18 +1,20 @@
+
 import {
   useAccount,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
-import { parseEther, formatEther } from "viem";
+import { parseEther } from "viem";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "./constants";
 
 /* ============================================================
-   V2 READ HOOKS
+   DEVTRUST V3 READ HOOKS
    ============================================================ */
 
 /**
  * Read the next DevTrust PR ID.
+ *
  * The next PR registered will receive this ID.
  */
 export function useNextPRId() {
@@ -34,12 +36,19 @@ export function usePRBasic(prId: bigint | undefined) {
     args: prId !== undefined ? [prId] : undefined,
     query: {
       enabled: prId !== undefined,
+      refetchInterval: 5000,
     },
   });
 }
 
 /**
  * Read PR staking information.
+ *
+ * Returns the existing v2-compatible four values:
+ * - developer stake
+ * - reviewer reward pool
+ * - total reviewer stake
+ * - reviewer count
  */
 export function usePRStaking(prId: bigint | undefined) {
   return useReadContract({
@@ -55,7 +64,70 @@ export function usePRStaking(prId: bigint | undefined) {
 }
 
 /**
+ * Read the company-defined minimum reviewer stake
+ * and whether the PR is eligible for company testing.
+ *
+ * Returns:
+ * [minReviewerStake, testingEligible]
+ */
+export function usePRThreshold(prId: bigint | undefined) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "getPRThreshold",
+    args: prId !== undefined ? [prId] : undefined,
+    query: {
+      enabled: prId !== undefined,
+      refetchInterval: 5000,
+    },
+  });
+}
+
+/**
+ * Read the complete testing eligibility state.
+ *
+ * Returns:
+ * [totalReviewerStake, minReviewerStake, testingEligible]
+ */
+export function useTestingEligibility(prId: bigint | undefined) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "getTestingEligibility",
+    args: prId !== undefined ? [prId] : undefined,
+    query: {
+      enabled: prId !== undefined,
+      refetchInterval: 5000,
+    },
+  });
+}
+
+/**
+ * Read whether a PR is eligible for company testing.
+ */
+export function useIsEligibleForTesting(prId: bigint | undefined) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "isEligibleForTesting",
+    args: prId !== undefined ? [prId] : undefined,
+    query: {
+      enabled: prId !== undefined,
+      refetchInterval: 5000,
+    },
+  });
+}
+
+/**
  * Read PR status.
+ *
+ * Status enum:
+ * 0 = NONE
+ * 1 = OPEN
+ * 2 = MERGED
+ * 3 = APPROVED
+ * 4 = REJECTED
+ * 5 = SETTLED
  */
 export function usePRStatus(prId: bigint | undefined) {
   return useReadContract({
@@ -71,7 +143,7 @@ export function usePRStatus(prId: bigint | undefined) {
 }
 
 /**
- * Read merge/challenge information.
+ * Read merge and challenge information.
  */
 export function usePRMergeInfo(prId: bigint | undefined) {
   return useReadContract({
@@ -88,6 +160,9 @@ export function usePRMergeInfo(prId: bigint | undefined) {
 
 /**
  * Read a reviewer's review for a PR.
+ *
+ * If reviewer is not supplied, the connected wallet
+ * is used automatically.
  */
 export function useReview(
   prId: bigint | undefined,
@@ -113,7 +188,7 @@ export function useReview(
 }
 
 /**
- * Read number of reviewers for a PR.
+ * Read the number of reviewers who have staked on a PR.
  */
 export function useReviewerCount(prId: bigint | undefined) {
   return useReadContract({
@@ -145,6 +220,7 @@ export function useReviewerAt(
         : undefined,
     query: {
       enabled: prId !== undefined && index !== undefined,
+      refetchInterval: 5000,
     },
   });
 }
@@ -172,9 +248,31 @@ export function useDeveloperReputation(
 }
 
 /**
- * Read SBT information for a developer.
+ * Read SBT information by token ID.
+ *
+ * DevTrust v3 getSBTInfo() expects a token ID,
+ * not a developer wallet address.
  */
-export function useSBTInfo(
+export function useSBTInfo(tokenId?: bigint) {
+  return useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "getSBTInfo",
+    args: tokenId !== undefined ? [tokenId] : undefined,
+    query: {
+      enabled: tokenId !== undefined,
+      refetchInterval: 5000,
+    },
+  });
+}
+
+/**
+ * Read the token IDs owned by a developer.
+ *
+ * Useful if the v3 UI needs to display the developer's
+ * Proof-of-Skill SBTs.
+ */
+export function useDeveloperTokens(
   developer?: `0x${string}`
 ) {
   const { address } = useAccount();
@@ -184,7 +282,7 @@ export function useSBTInfo(
   return useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
-    functionName: "getSBTInfo",
+    functionName: "getDeveloperTokens",
     args: developerAddress ? [developerAddress] : undefined,
     query: {
       enabled: !!developerAddress,
@@ -194,13 +292,22 @@ export function useSBTInfo(
 }
 
 /* ============================================================
-   V2 WRITE HOOKS
+   DEVTRUST V3 WRITE HOOKS
    ============================================================ */
 
 /**
- * Register a GitHub pull request on DevTrust.
+ * Register a GitHub pull request on DevTrust v3.
  *
- * developerStake + reviewerRewardPool = msg.value
+ * Contract arguments:
+ * - repository
+ * - prNumber
+ * - prUrl
+ * - company
+ * - reviewerRewardPool
+ * - minReviewerStake
+ *
+ * msg.value:
+ * developerStake + reviewerRewardPool
  */
 export function useRegisterPR() {
   const {
@@ -223,6 +330,7 @@ export function useRegisterPR() {
     prUrl: string,
     company: `0x${string}`,
     reviewerRewardPoolEth: string,
+    minReviewerStakeEth: string,
     totalValueEth: string
   ) => {
     writeContract({
@@ -235,6 +343,7 @@ export function useRegisterPR() {
         prUrl,
         company,
         parseEther(reviewerRewardPoolEth),
+        parseEther(minReviewerStakeEth),
       ],
       value: parseEther(totalValueEth),
     });
@@ -257,6 +366,13 @@ export function useRegisterPR() {
  * approveVote:
  *   true  = approve
  *   false = reject
+ *
+ * The ETH amount is supplied as msg.value.
+ *
+ * In v3, when total reviewer stake reaches the
+ * company-defined minimum reviewer stake, the
+ * contract automatically marks the PR as
+ * eligible for company testing.
  */
 export function useStakeOnPR() {
   const {
@@ -383,7 +499,7 @@ export function useRejectPR() {
 /**
  * Settle an approved/rejected PR.
  *
- * This can be called by any account once the PR
+ * Can be called by any account once the PR
  * has been approved or rejected.
  */
 export function useSettlePR() {
@@ -424,18 +540,17 @@ export function useSettlePR() {
 /* ============================================================
    LEGACY COMPATIBILITY READ HOOKS
    ============================================================
-   
-   These are temporarily retained so existing UI components
-   can compile while we migrate them from the v1 interface.
-   
-   They intentionally do NOT call removed v1 contract methods.
+
+   These are retained temporarily because older UI components
+   in DashboardSection.tsx still reference the old interface.
+
+   They do not represent the actual v3 reviewer-staking flow.
    ============================================================ */
 
 /**
- * v1 compatibility hook.
+ * Legacy global-staking compatibility hook.
  *
- * DevTrust v2 no longer has a global isStaked(address)
- * concept. Reviewers stake against individual PRs instead.
+ * v3 uses stakeOnPR() instead of a global isStaked() state.
  */
 export function useIsStaked() {
   return {
@@ -447,9 +562,7 @@ export function useIsStaked() {
 }
 
 /**
- * v1 compatibility hook.
- *
- * DevTrust v2 stores reviewer stakes per PR.
+ * Legacy global-stake amount compatibility hook.
  */
 export function useStakeAmount() {
   return {
@@ -462,9 +575,7 @@ export function useStakeAmount() {
 }
 
 /**
- * v1 compatibility hook.
- *
- * v2 uses PRs rather than the old contribution records.
+ * Legacy record-count compatibility hook.
  */
 export function useTotalRecords() {
   return {
@@ -476,7 +587,9 @@ export function useTotalRecords() {
 }
 
 /**
- * v1 compatibility hook.
+ * Legacy trust-information hook.
+ *
+ * The underlying getter is still present in the v3 contract.
  */
 export function useTrustInfo() {
   return useReadContract({
@@ -487,7 +600,7 @@ export function useTrustInfo() {
 }
 
 /**
- * v1 compatibility hook.
+ * Legacy record getter.
  */
 export function useRecord(index: bigint | undefined) {
   return useReadContract({
@@ -502,16 +615,15 @@ export function useRecord(index: bigint | undefined) {
 }
 
 /**
- * v1 compatibility write hook.
+ * Legacy global stake() compatibility hook.
  *
- * The old global stake() function no longer exists in v2.
- * Kept only so old UI code does not immediately fail to compile.
+ * The actual reviewer flow is useStakeOnPR().
  */
 export function useStake() {
   return {
     stake: () => {
       console.warn(
-        "The legacy stake() function is not available in DevTrust v2. Use stakeOnPR() instead."
+        "The legacy stake() function is not available in DevTrust v3. Use stakeOnPR() instead."
       );
     },
     hash: undefined,
@@ -524,13 +636,15 @@ export function useStake() {
 }
 
 /**
- * v1 compatibility write hook.
+ * Legacy custom-stake compatibility hook.
+ *
+ * The actual reviewer flow is useStakeOnPR().
  */
 export function useStakeCustomAmount() {
   return {
     stake: (_ethAmount: string) => {
       console.warn(
-        "The legacy stake() function is not available in DevTrust v2. Use stakeOnPR() instead."
+        "The legacy stake() function is not available in DevTrust v3. Use stakeOnPR() instead."
       );
     },
     hash: undefined,

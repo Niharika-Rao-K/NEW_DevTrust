@@ -23,6 +23,13 @@ import {
   Info,
 } from "lucide-react";
 
+import {
+  usePRBasic,
+  usePRStaking,
+  useTestingEligibility,
+  usePRStatus,
+} from "./hooks";
+
 // ─── Contract config (V2 address — update after deploy) ──────────────────────
 
 const CONTRACT_ADDRESS_V2 = (import.meta.env.VITE_CONTRACT_ADDRESS_V2 ||
@@ -107,7 +114,7 @@ function updateBountyStatus(address: string, issueUrl: string, update: Partial<B
   } catch {}
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers //─────────────────────────────────────────────────────────────────
 
 function TxLink({ hash }: { hash: string }) {
   return (
@@ -559,238 +566,650 @@ function CompanyGate() {
           Company Portal
         </h3>
         <p className="text-gray-400 mb-8 leading-relaxed">
-          Connect your wallet to post issue bounties, track resolutions, and manage your DevTrust company account.
+          Connect your wallet to review contributions that have reached the company-defined reviewer-stake threshold and manage the testing and verification lifecycle.
         </p>
         <ConnectWalletButton variant="inline" className="mx-auto" />
-        <p className="text-xs text-gray-500 mt-4">Uses Sepolia testnet</p>
+        <p className="text-xs text-gray-500 mt-4">DevTrust v3 · Sepolia testnet
+</p>
       </div>
     </div>
   );
 }
 
-// ─── Main Company Page ────────────────────────────────────────────────────────
+// ─── Main Company Page 
+// ─── DevTrust v3: Company Testing Inbox ─────────────────────────────────────
 
+function V3CompanyTestingInbox() {
+  const DEMO_PR_ID = 1n;
+
+  const { address } = useAccount();
+
+  const {
+    data: prBasic,
+    isLoading: isBasicLoading,
+  } = usePRBasic(DEMO_PR_ID);
+
+  const {
+    data: prStaking,
+    isLoading: isStakingLoading,
+  } = usePRStaking(DEMO_PR_ID);
+
+  const {
+    data: eligibility,
+    isLoading: isEligibilityLoading,
+  } = useTestingEligibility(DEMO_PR_ID);
+
+  const {
+    data: prStatus,
+  } = usePRStatus(DEMO_PR_ID);
+
+  const repository = prBasic?.[1] as string | undefined;
+  const prNumber = prBasic?.[2] as bigint | undefined;
+  const prUrl = prBasic?.[3] as string | undefined;
+  const developer = prBasic?.[4] as string | undefined;
+  const company = prBasic?.[5] as string | undefined;
+
+  const developerStake = prStaking?.[0] as bigint | undefined;
+  const reviewerRewardPool = prStaking?.[1] as bigint | undefined;
+  const totalReviewerStake = prStaking?.[2] as bigint | undefined;
+  const reviewerCount = prStaking?.[3] as bigint | undefined;
+
+  const reviewerThreshold = eligibility?.[1] as bigint | undefined;
+  const testingEligible = eligibility?.[2] as boolean | undefined;
+
+  const status = prStatus?.[0] as bigint | undefined;
+  const challengeDeadline = prStatus?.[3] as bigint | undefined;
+
+  const isLoading =
+    isBasicLoading ||
+    isStakingLoading ||
+    isEligibilityLoading;
+
+  // DevTrust v3 enum:
+  // 0 = NONE
+  // 1 = OPEN
+  // 2 = MERGED
+  // 3 = APPROVED
+  // 4 = REJECTED
+  // 5 = SETTLED
+
+  const statusNumber = status !== undefined ? Number(status) : undefined;
+
+  const statusLabel =
+    statusNumber === 1
+      ? "Open"
+      : statusNumber === 2
+        ? "Merged"
+        : statusNumber === 3
+          ? "Approved"
+          : statusNumber === 4
+            ? "Rejected"
+            : statusNumber === 5
+              ? "Settled"
+              : "Loading";
+
+  const isCompany =
+    address &&
+    company &&
+    address.toLowerCase() === company.toLowerCase();
+
+  return (
+    <div
+      className="glass-strong rounded-2xl border p-8"
+      style={{ borderColor: "rgba(139,92,246,0.25)" }}
+    >
+      {/* Header */}
+      <div className="flex items-start gap-3 mb-6">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{
+            background: "rgba(139,92,246,0.1)",
+            border: "1px solid rgba(139,92,246,0.3)",
+          }}
+        >
+          <GitBranch className="w-5 h-5 text-[#8b5cf6]" />
+        </div>
+
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3
+              className="font-bold text-white"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Company Testing Inbox
+            </h3>
+
+            <span
+              className="text-[9px] px-2 py-1 rounded-full font-bold tracking-wider"
+              style={{
+                background: "rgba(0,240,255,0.1)",
+                border: "1px solid rgba(0,240,255,0.25)",
+                color: "#00f0ff",
+              }}
+            >
+              V3 · LIVE
+            </span>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-1">
+            Contributions that reached the company-defined reviewer-stake
+            threshold.
+          </p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10 text-sm text-gray-500 gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Reading DevTrust v3 from Sepolia…
+        </div>
+      ) : (
+        <>
+          {/* PR identity */}
+          <div
+            className="rounded-xl p-5 mb-4"
+            style={{
+              background: "rgba(255,255,255,0.025)",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+                  GitHub Pull Request
+                </div>
+
+                <div className="text-base font-bold text-white truncate">
+                  {repository || "Unknown repository"}
+                </div>
+
+                {prNumber !== undefined && (
+                  <div className="text-sm text-[#00f0ff] mt-1">
+                    PR #{prNumber.toString()}
+                  </div>
+                )}
+
+                {prUrl && (
+                  <a
+                    href={prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-[#00f0ff] mt-2"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View GitHub PR
+                  </a>
+                )}
+              </div>
+
+              <span
+                className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full font-semibold"
+                style={{
+                  color:
+                    testingEligible
+                      ? "#10b981"
+                      : "#9ca3af",
+                  background:
+                    testingEligible
+                      ? "rgba(16,185,129,0.1)"
+                      : "rgba(255,255,255,0.04)",
+                  border:
+                    testingEligible
+                      ? "1px solid rgba(16,185,129,0.25)"
+                      : "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {testingEligible
+                  ? "✓ Testing Eligible"
+                  : "Waiting for Threshold"}
+              </span>
+            </div>
+          </div>
+
+          {/* Threshold */}
+          <div className="grid sm:grid-cols-3 gap-3 mb-5">
+            <div
+              className="rounded-xl p-4"
+              style={{
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider">
+                Reviewer Stake
+              </div>
+
+              <div className="text-lg font-bold text-white font-mono mt-1">
+                {totalReviewerStake !== undefined
+                  ? formatEther(totalReviewerStake)
+                  : "0"}{" "}
+                ETH
+              </div>
+
+              <div className="text-[10px] text-gray-600 mt-1">
+                Current total
+              </div>
+            </div>
+
+            <div
+              className="rounded-xl p-4"
+              style={{
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider">
+                Required Threshold
+              </div>
+
+              <div className="text-lg font-bold text-white font-mono mt-1">
+                {reviewerThreshold !== undefined
+                  ? formatEther(reviewerThreshold)
+                  : "0"}{" "}
+                ETH
+              </div>
+
+              <div className="text-[10px] text-gray-600 mt-1">
+                Company-defined minimum
+              </div>
+            </div>
+
+            <div
+              className="rounded-xl p-4"
+              style={{
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider">
+                Reviewers
+              </div>
+
+              <div className="text-lg font-bold text-white font-mono mt-1">
+                {reviewerCount?.toString() ?? "0"}
+              </div>
+
+              <div className="text-[10px] text-gray-600 mt-1">
+                Reviewer(s) participating
+              </div>
+            </div>
+          </div>
+
+          {/* Testing gate */}
+          <div
+            className="rounded-xl p-5 mb-5"
+            style={{
+              background: testingEligible
+                ? "rgba(16,185,129,0.06)"
+                : "rgba(251,191,36,0.05)",
+              border: testingEligible
+                ? "1px solid rgba(16,185,129,0.22)"
+                : "1px solid rgba(251,191,36,0.18)",
+            }}
+          >
+            <div className="flex items-start gap-3">
+              {testingEligible ? (
+                <CheckCircle className="w-5 h-5 text-green-400 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+              )}
+
+              <div>
+                <div className="text-sm font-semibold text-white">
+                  {testingEligible
+                    ? "Contribution is eligible for company testing"
+                    : "Contribution is not yet eligible for company testing"}
+                </div>
+
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  {testingEligible
+                    ? "The reviewer-backed stake has reached the minimum threshold specified by the company. The company can now test the contribution off-chain."
+                    : "The contribution remains in the reviewer staking stage until the company-defined minimum reviewer stake is reached."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Lifecycle */}
+          <div
+            className="rounded-xl p-5"
+            style={{
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            <div className="text-xs font-semibold text-white mb-4">
+              DevTrust v3 lifecycle
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center gap-3">
+                <span className="text-green-400">✓</span>
+                <span className="text-gray-300">
+                  Developer registers contribution
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span
+                  className={
+                    testingEligible
+                      ? "text-green-400"
+                      : "text-yellow-400"
+                  }
+                >
+                  {testingEligible ? "✓" : "●"}
+                </span>
+                <span className="text-gray-300">
+                  Reviewer stake reaches company threshold
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span
+                  className={
+                    testingEligible
+                      ? "text-green-400"
+                      : "text-gray-600"
+                  }
+                >
+                  {testingEligible ? "✓" : "○"}
+                </span>
+                <span className="text-gray-300">
+                  Company testing
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span
+                  className={
+                    statusNumber !== undefined && statusNumber >= 2
+                      ? "text-green-400"
+                      : "text-gray-600"
+                  }
+                >
+                  {statusNumber !== undefined && statusNumber >= 2
+                    ? "✓"
+                    : "○"}
+                </span>
+                <span className="text-gray-300">
+                  GitHub merge verified by oracle
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span
+                  className={
+                    statusNumber !== undefined && statusNumber >= 2
+                      ? "text-green-400"
+                      : "text-gray-600"
+                  }
+                >
+                  {statusNumber !== undefined && statusNumber >= 2
+                    ? "✓"
+                    : "○"}
+                </span>
+
+                <span className="text-gray-300">
+                  Challenge period
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span
+                  className={
+                    statusNumber !== undefined && statusNumber >= 3
+                      ? "text-green-400"
+                      : "text-gray-600"
+                  }
+                >
+                  {statusNumber !== undefined && statusNumber >= 3
+                    ? "✓"
+                    : "○"}
+                </span>
+
+                <span className="text-gray-300">
+                  Company approval / rejection
+                </span>
+              </div>
+            </div>
+
+            {/* Current contract state */}
+            <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap gap-x-6 gap-y-2 text-[10px] text-gray-500">
+              <span>
+                Contract status:{" "}
+                <span className="text-gray-300">
+                  {statusLabel}
+                </span>
+              </span>
+
+              <span>
+                Developer stake:{" "}
+                <span className="text-gray-300">
+                  {developerStake !== undefined
+                    ? formatEther(developerStake)
+                    : "0"}{" "}
+                  ETH
+                </span>
+              </span>
+
+              <span>
+                Reviewer pool:{" "}
+                <span className="text-gray-300">
+                  {reviewerRewardPool !== undefined
+                    ? formatEther(reviewerRewardPool)
+                    : "0"}{" "}
+                  ETH
+                </span>
+              </span>
+            </div>
+
+            {challengeDeadline !== undefined &&
+              challengeDeadline > 0n && (
+                <div className="mt-3 text-[10px] text-gray-500">
+                  Challenge deadline recorded on-chain:{" "}
+                  <span className="text-gray-300">
+                    {new Date(
+                      Number(challengeDeadline) * 1000
+                    ).toLocaleString()}
+                  </span>
+                </div>
+              )}
+          </div>
+
+          {/* Wallet information */}
+          <div className="mt-4 text-[10px] text-gray-600">
+            Connected wallet:{" "}
+            {address
+              ? `${address.slice(0, 8)}...${address.slice(-6)}`
+              : "Not connected"}
+            {" · "}
+            Company wallet:{" "}
+            {company
+              ? `${company.slice(0, 8)}...${company.slice(-6)}`
+              : "—"}
+            {isCompany && (
+              <span className="text-green-500 ml-2">
+                ✓ Company wallet
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+//────────────────────────────────────────────────────────
 export function CompanyPage() {
   const { address, isConnected } = useAccount();
   const { user: githubUser } = useGitHubAuth();
 
-  const [bounties, setBounties] = useState<BountyRecord[]>([]);
-  const [showPostModal, setShowPostModal] = useState(false);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "solved" | "refunded">("all");
-
-  const refresh = useCallback(() => {
-    if (address) setBounties(loadBounties(address));
-  }, [address]);
-
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 5000);
-    return () => clearInterval(id);
-  }, [refresh]);
-
-  if (!isConnected || !address) return <CompanyGate />;
-
-  const filtered = bounties.filter((b) => {
-    const matchSearch =
-      !search.trim() ||
-      b.issueTitle.toLowerCase().includes(search.toLowerCase()) ||
-      b.repoName.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "all" || b.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  if (!isConnected || !address) {
+    return <CompanyGate />;
+  }
 
   return (
     <div className="relative z-10 py-12 px-6 max-w-6xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-6">
         <div>
-          <div
-            className="inline-flex items-center gap-2 glass px-4 py-2 rounded-full mb-4"
-          >
+          <div className="inline-flex items-center gap-2 glass px-4 py-2 rounded-full mb-4">
             <Building2 className="w-4 h-4 text-[#00f0ff]" />
-            <span className="text-sm" style={{ fontFamily: "var(--font-mono)" }}>
+            <span
+              className="text-sm"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
               Company Portal
             </span>
           </div>
-          <h1 className="text-4xl font-bold mb-2" style={{ fontFamily: "var(--font-display)" }}>
+
+          <h1
+            className="text-4xl font-bold mb-2"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
             {githubUser ? (
-              <>Welcome, <span className="gradient-text">@{githubUser.login}</span></>
+              <>
+                Welcome,{" "}
+                <span className="gradient-text">
+                  @{githubUser.login}
+                </span>
+              </>
             ) : (
-              <span className="gradient-text">Issue Bounties</span>
+              <span className="gradient-text">
+                Company Testing Portal
+              </span>
             )}
           </h1>
-          <p className="text-gray-400">
-            Post ETH bounties on GitHub issues. DevTrust reviewers stake their reputation to verify solutions
-            before they reach you — so only pre-audited PRs land in your inbox.
+
+          <p className="text-gray-400 max-w-3xl leading-relaxed">
+            Review GitHub contributions after they receive sufficient
+            reviewer-backed stake. A contribution becomes eligible for
+            company testing when the company-defined reviewer-stake
+            threshold is reached.
           </p>
         </div>
-        <button
-          onClick={() => setShowPostModal(true)}
-          className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 hover:scale-105"
-          style={{ background: "linear-gradient(135deg, #00f0ff, #8b5cf6)", color: "#0a0a0f" }}
-        >
-          <Plus className="w-4 h-4" />
-          Post Bounty
-        </button>
       </div>
 
-      {/* How It Works Banner */}
+      {/* How DevTrust v3 Works */}
       <div
         className="rounded-2xl p-6 border"
-        style={{ background: "rgba(0,240,255,0.03)", borderColor: "rgba(0,240,255,0.15)" }}
+        style={{
+          background: "rgba(0,240,255,0.03)",
+          borderColor: "rgba(0,240,255,0.15)",
+        }}
       >
-        <h3 className="text-sm font-bold text-white mb-4" style={{ fontFamily: "var(--font-display)" }}>
-          How DevTrust Bounties Work
-        </h3>
-        <div className="grid md:grid-cols-4 gap-4">
-          {[
-            { step: "1", icon: Plus, label: "Post Bounty", desc: "Attach ETH to a GitHub issue. 80% goes to the dev, 20% to reviewers." },
-            { step: "2", icon: GitBranch, label: "Dev Submits PR", desc: "A developer solves the issue and submits their branch via DevTrust." },
-            { step: "3", icon: Shield, label: "Reviewers Stake & Vote", desc: "Expert reviewers stake ETH and vote on the solution's quality." },
-            { step: "4", icon: CheckCircle, label: "You Merge & Pay", desc: "Merge the pre-vetted PR. ETH distributes automatically to dev + reviewers." },
-          ].map((s) => (
-            <div key={s.step} className="flex gap-3 items-start">
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
-                style={{ background: "rgba(0,240,255,0.12)", border: "1px solid rgba(0,240,255,0.3)", color: "#00f0ff" }}
-              >
-                {s.step}
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-white mb-0.5">{s.label}</div>
-                <div className="text-[11px] text-gray-500 leading-relaxed">{s.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        <div className="flex items-center gap-2 mb-5">
+          <Shield className="w-4 h-4 text-[#00f0ff]" />
 
-      {/* Stats */}
-      <CompanyStatsBar address={address} />
-
-      {/* Bounty List */}
-      <div>
-        {/* Toolbar */}
-        <div className="flex items-center gap-4 mb-5 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              type="text"
-              placeholder="Search by issue title or repo…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }}
-              onFocus={(e) => (e.target.style.borderColor = "rgba(0,240,255,0.4)")}
-              onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            {(["all", "active", "solved", "refunded"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all"
-                style={{
-                  background: filterStatus === s ? "rgba(0,240,255,0.12)" : "rgba(255,255,255,0.04)",
-                  border: filterStatus === s ? "1px solid rgba(0,240,255,0.35)" : "1px solid rgba(255,255,255,0.08)",
-                  color: filterStatus === s ? "#00f0ff" : "#9ca3af",
-                }}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Empty state */}
-        {bounties.length === 0 ? (
-          <div
-            className="glass-strong rounded-2xl border border-dashed p-16 text-center"
-            style={{ borderColor: "rgba(255,255,255,0.1)" }}
+          <h3
+            className="text-sm font-bold text-white"
+            style={{ fontFamily: "var(--font-display)" }}
           >
-            <Coins className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-bold mb-2 text-white" style={{ fontFamily: "var(--font-display)" }}>
-              No Bounties Yet
-            </h3>
-            <p className="text-gray-500 mb-6 text-sm">
-              Post your first bounty to start receiving pre-vetted solutions from developers.
-            </p>
-            <button
-              onClick={() => setShowPostModal(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:scale-105"
-              style={{ background: "linear-gradient(135deg, #00f0ff, #8b5cf6)", color: "#0a0a0f" }}
-            >
-              <Plus className="w-4 h-4" />
-              Post First Bounty
-            </button>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 text-sm">
-            No bounties match your search.
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filtered.map((b) => (
-              <BountyCard
-                key={b.issueUrl}
-                bounty={b}
-                walletAddress={address}
-                onRefresh={refresh}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+            How DevTrust v3 Works
+          </h3>
 
-      {/* Incoming PRs section — placeholder for Phase 3 */}
-      <div
-        className="glass-strong rounded-2xl border p-8"
-        style={{ borderColor: "rgba(139,92,246,0.2)" }}
-      >
-        <div className="flex items-center gap-3 mb-4">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.3)" }}
-          >
-            <GitBranch className="w-5 h-5 text-[#8b5cf6]" />
-          </div>
-          <div>
-            <h3 className="font-bold text-white" style={{ fontFamily: "var(--font-display)" }}>
-              Pre-Vetted PRs Inbox
-            </h3>
-            <p className="text-xs text-gray-500">
-              PRs that passed reviewer staking gate — ready for your final review
-            </p>
-          </div>
           <span
-            className="ml-auto text-xs px-3 py-1 rounded-full"
-            style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.3)", color: "#8b5cf6" }}
+            className="text-[9px] px-2 py-1 rounded-full font-bold tracking-wider"
+            style={{
+              background: "rgba(0,240,255,0.1)",
+              border: "1px solid rgba(0,240,255,0.25)",
+              color: "#00f0ff",
+            }}
           >
-            Phase 3
+            LIVE ON SEPOLIA
           </span>
         </div>
-        <div className="text-center py-8">
-          <TrendingUp className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">
-            Coming in Phase 3 — the two-repo submission portal. Pre-vetted PRs will appear here
-            automatically once reviewer staking threshold is met.
-          </p>
+
+        <div className="grid md:grid-cols-4 gap-5">
+          {[
+            {
+              step: "1",
+              icon: Plus,
+              label: "Contribution Registered",
+              desc: "A developer registers a GitHub pull request and deposits the required developer stake.",
+            },
+            {
+              step: "2",
+              icon: Shield,
+              label: "Reviewer Staking",
+              desc: "Reviewers stake ETH and vote on the contribution.",
+            },
+            {
+              step: "3",
+              icon: CheckCircle,
+              label: "Testing Eligibility",
+              desc: "The contribution becomes eligible for company testing once the required total reviewer stake is reached.",
+            },
+            {
+              step: "4",
+              icon: GitBranch,
+              label: "Merge Verification",
+              desc: "After testing, the GitHub merge is verified by the oracle before the challenge period begins.",
+            },
+          ].map((s) => {
+            const Icon = s.icon;
+
+            return (
+              <div
+                key={s.step}
+                className="flex gap-3 items-start"
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+                  style={{
+                    background: "rgba(0,240,255,0.12)",
+                    border: "1px solid rgba(0,240,255,0.3)",
+                    color: "#00f0ff",
+                  }}
+                >
+                  {s.step}
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-white mb-1">
+                    <Icon className="w-3.5 h-3.5 text-[#00f0ff]" />
+                    {s.label}
+                  </div>
+
+                  <div className="text-[11px] text-gray-500 leading-relaxed">
+                    {s.desc}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Post Bounty Modal */}
-      {showPostModal && (
-        <PostBountyModal
-          walletAddress={address}
-          onClose={() => setShowPostModal(false)}
-          onSuccess={() => {
-            setShowPostModal(false);
-            refresh();
-          }}
-        />
-      )}
+      {/* Live V3 Company Inbox */}
+      <V3CompanyTestingInbox />
+
+      {/* Company wallet */}
+      <div
+        className="glass rounded-xl px-5 py-4 flex flex-wrap items-center justify-between gap-3"
+        style={{
+          border: "1px solid rgba(139,92,246,0.2)",
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <Wallet className="w-4 h-4 text-[#8b5cf6]" />
+
+          <div>
+            <div className="text-xs text-gray-500">
+              Connected Company Wallet
+            </div>
+
+            <div className="text-sm text-white font-mono">
+              {address.slice(0, 8)}...
+              {address.slice(-6)}
+            </div>
+          </div>
+        </div>
+
+        <div className="text-[10px] text-gray-600">
+          Sepolia testnet · DevTrust v3
+        </div>
+      </div>
     </div>
   );
 }
