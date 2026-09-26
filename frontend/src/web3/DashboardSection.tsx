@@ -20,13 +20,13 @@ import {
   TrendingUp,
   Clock,
 } from "lucide-react";
-import { useStake, useStakeCustomAmount, useIsStaked, useStakeAmount, useTotalRecords } from "./hooks";
+import { useStake, useStakeCustomAmount, useIsStaked, useStakeAmount, useTotalRecords, usePRBasic, usePRStaking, useTestingEligibility, useStakeOnPR,  } from "./hooks";
 import { ConnectWalletButton } from "./ConnectWalletButton";
 import { ContributionFeed } from "./ContributionFeed";
 import { BACKEND_URL, MIN_STAKE_ETH } from "./constants";
 import { GitHubAuthGate, useGitHubAuth } from "./GitHubAuth";
 import { useUserRoles } from "./UserRolesContext";
-
+import { formatEther } from "viem";
 // ─── Reviewer Stake Storage Helpers ──────────────────────────────────────────
 
 export interface StakeRecord {
@@ -1333,6 +1333,437 @@ function MyStakesPanel({ githubId }: { githubId: string }) {
   );
 }
 
+// ─── DevTrust v3 Live Reviewer Staking Demo ────────────────────────────────
+
+function V3ReviewerStakeCard() {
+  const DEMO_PR_ID = 2n;
+
+  const { address, isConnected } = useAccount();
+
+  const {
+    data: prBasic,
+    refetch: refetchPRBasic,
+  } = usePRBasic(DEMO_PR_ID);
+
+  const {
+    data: prStaking,
+    refetch: refetchPRStaking,
+  } = usePRStaking(DEMO_PR_ID);
+
+  const {
+    data: eligibility,
+    refetch: refetchEligibility,
+  } = useTestingEligibility(DEMO_PR_ID);
+
+  const {
+    stakeOnPR,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+    hash,
+  } = useStakeOnPR();
+
+  const refresh = async () => {
+    await Promise.all([
+      refetchPRBasic(),
+      refetchPRStaking(),
+      refetchEligibility(),
+    ]);
+  };
+
+  useEffect(() => {
+    if (isSuccess) {
+      refresh();
+    }
+  }, [isSuccess]);
+
+  const repository = prBasic?.[1] as string | undefined;
+  const prNumber = prBasic?.[2] as bigint | undefined;
+  const prUrl = prBasic?.[3] as string | undefined;
+  const developer = prBasic?.[4] as string | undefined;
+  const company = prBasic?.[5] as string | undefined;
+
+  const developerStake = prStaking?.[0] as bigint | undefined;
+  const reviewerRewardPool = prStaking?.[1] as bigint | undefined;
+  const totalReviewerStake = prStaking?.[2] as bigint | undefined;
+  const reviewerCount = prStaking?.[3] as bigint | undefined;
+
+  const totalStake = eligibility?.[0] as bigint | undefined;
+  const minimumStake = eligibility?.[1] as bigint | undefined;
+  const testingEligible = eligibility?.[2] as boolean | undefined;
+
+  const thresholdReached =
+    totalStake !== undefined &&
+    minimumStake !== undefined &&
+    totalStake >= minimumStake;
+
+  const stakeAmount = minimumStake
+    ? formatEther(minimumStake)
+    : "0.001";
+
+  const handleStake = async (approveVote: boolean) => {
+    if (!isConnected || !address) return;
+
+   stakeOnPR(
+        DEMO_PR_ID,
+        approveVote,
+        stakeAmount
+      );
+    };
+
+  return (
+    <div
+      className="rounded-2xl p-5 mb-6"
+      style={{
+        background: "rgba(0,240,255,0.04)",
+        border: "1px solid rgba(0,240,255,0.22)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span
+              className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider"
+              style={{
+                background: "rgba(0,240,255,0.12)",
+                color: "#00f0ff",
+              }}
+            >
+              DevTrust v3
+            </span>
+
+            <span className="text-[10px] text-gray-500">
+              LIVE ON SEPOLIA
+            </span>
+          </div>
+
+          <h3
+            className="font-bold text-white text-lg"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Reviewer Staking
+          </h3>
+
+          <p className="text-xs text-gray-500 mt-1">
+            Reviewer-backed threshold for company testing
+          </p>
+        </div>
+
+        <div
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+            testingEligible
+              ? "text-green-300"
+              : "text-yellow-300"
+          }`}
+          style={{
+            background: testingEligible
+              ? "rgba(34,197,94,0.10)"
+              : "rgba(251,191,36,0.10)",
+          }}
+        >
+          {testingEligible
+            ? "✓ Eligible for testing"
+            : "Waiting for reviewer stake"}
+        </div>
+      </div>
+
+      {/* PR information */}
+      <div className="grid sm:grid-cols-2 gap-3 mb-5">
+        <div
+          className="rounded-xl p-3"
+          style={{
+            background: "rgba(255,255,255,0.035)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+            Pull Request
+          </div>
+
+          <div className="text-sm text-white font-medium">
+            {repository || "Loading repository…"}
+          </div>
+
+          {prNumber !== undefined && (
+            <div className="text-xs text-[#00f0ff] mt-1">
+              PR #{prNumber.toString()}
+            </div>
+          )}
+
+          {prUrl && (
+            <a
+              href={prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-gray-500 hover:text-[#00f0ff] mt-1 inline-block"
+            >
+              View GitHub PR →
+            </a>
+          )}
+        </div>
+
+        <div
+          className="rounded-xl p-3"
+          style={{
+            background: "rgba(255,255,255,0.035)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+            Reviewer Threshold
+          </div>
+
+          <div className="text-lg text-white font-bold">
+            {minimumStake !== undefined
+              ? `${formatEther(minimumStake)} ETH`
+              : "Loading…"}
+          </div>
+
+          <div className="text-[11px] text-gray-500 mt-1">
+            Minimum total reviewer stake
+          </div>
+        </div>
+      </div>
+
+      {/* Staking progress */}
+      <div
+        className="rounded-xl p-4 mb-5"
+        style={{
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-400">
+            Reviewer-backed stake
+          </span>
+
+          <span className="text-xs text-white font-semibold">
+            {totalStake !== undefined
+              ? `${formatEther(totalStake)} ETH`
+              : "0 ETH"}
+            {" / "}
+            {minimumStake !== undefined
+              ? `${formatEther(minimumStake)} ETH`
+              : "0.001 ETH"}
+          </span>
+        </div>
+
+        <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width:
+                minimumStake && minimumStake > 0n && totalStake !== undefined
+                  ? `${Math.min(
+                      100,
+                      Number((totalStake * 100n) / minimumStake)
+                    )}%`
+                  : "0%",
+              background: "#00f0ff",
+            }}
+          />
+        </div>
+
+        <div className="flex justify-between mt-2 text-[10px] text-gray-500">
+          <span>
+            {reviewerCount !== undefined
+              ? `${reviewerCount.toString()} reviewer(s)`
+              : "Loading reviewers…"}
+          </span>
+
+          <span>
+            {thresholdReached
+              ? "Threshold reached"
+              : "Threshold not reached"}
+          </span>
+        </div>
+      </div>
+
+      {/* Lifecycle explanation */}
+      <div
+        className="rounded-xl p-4 mb-5"
+        style={{
+          background: testingEligible
+            ? "rgba(34,197,94,0.06)"
+            : "rgba(251,191,36,0.05)",
+          border: testingEligible
+            ? "1px solid rgba(34,197,94,0.18)"
+            : "1px solid rgba(251,191,36,0.15)",
+        }}
+      >
+        <div className="text-xs font-semibold text-white mb-2">
+          Current lifecycle
+        </div>
+
+        <div className="space-y-1.5 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="text-green-400">✓</span>
+            <span className="text-gray-300">
+              Developer registered the contribution
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span
+              className={
+                thresholdReached
+                  ? "text-green-400"
+                  : "text-yellow-400"
+              }
+            >
+              {thresholdReached ? "✓" : "●"}
+            </span>
+            <span className="text-gray-300">
+              Reviewer stake threshold{" "}
+              {thresholdReached ? "reached" : "not yet reached"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span
+              className={
+                testingEligible
+                  ? "text-green-400"
+                  : "text-gray-600"
+              }
+            >
+              {testingEligible ? "✓" : "○"}
+            </span>
+            <span className="text-gray-300">
+              Eligible for company testing
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600">○</span>
+            <span className="text-gray-500">
+              GitHub merge verification
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600">○</span>
+            <span className="text-gray-500">
+              Challenge period and final settlement
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Connected wallet */}
+      <div className="mb-4">
+        <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+          Connected reviewer wallet
+        </div>
+
+        <div className="text-xs text-gray-300 font-mono">
+          {address
+            ? `${address.slice(0, 8)}...${address.slice(-6)}`
+            : "Wallet not connected"}
+        </div>
+      </div>
+
+      {/* Buttons */}
+      {!isConnected ? (
+        <div
+          className="px-4 py-3 rounded-xl text-xs text-yellow-300"
+          style={{
+            background: "rgba(251,191,36,0.07)",
+            border: "1px solid rgba(251,191,36,0.18)",
+          }}
+        >
+          Connect Wallet 2 to participate as a reviewer.
+        </div>
+      ) : testingEligible ? (
+        <div
+          className="px-4 py-3 rounded-xl text-xs text-green-300"
+          style={{
+            background: "rgba(34,197,94,0.07)",
+            border: "1px solid rgba(34,197,94,0.18)",
+          }}
+        >
+          ✓ The minimum reviewer stake has been reached. This PR is now
+          eligible for company testing.
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => handleStake(true)}
+            disabled={isPending || isConfirming}
+            className="px-4 py-3 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
+            style={{
+              background: "rgba(34,197,94,0.14)",
+              border: "1px solid rgba(34,197,94,0.3)",
+            }}
+          >
+            {isPending || isConfirming
+              ? "Confirming…"
+              : `Approve & Stake ${stakeAmount} ETH`}
+          </button>
+
+          <button
+            onClick={() => handleStake(false)}
+            disabled={isPending || isConfirming}
+            className="px-4 py-3 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
+            style={{
+              background: "rgba(239,68,68,0.10)",
+              border: "1px solid rgba(239,68,68,0.25)",
+            }}
+          >
+            {isPending || isConfirming
+              ? "Confirming…"
+              : `Reject & Stake ${stakeAmount} ETH`}
+          </button>
+        </div>
+      )}
+
+      {/* Transaction information */}
+      {hash && (
+        <div className="mt-4 text-[10px] text-gray-500 break-all">
+          Transaction:{" "}
+          <span className="text-[#00f0ff]">{hash}</span>
+        </div>
+      )}
+
+      {error && (
+        <div
+          className="mt-4 px-3 py-2 rounded-lg text-xs text-red-300"
+          style={{
+            background: "rgba(239,68,68,0.08)",
+            border: "1px solid rgba(239,68,68,0.18)",
+          }}
+        >
+          Transaction failed. The contract rejected the staking request.
+        </div>
+      )}
+
+      <div className="mt-4 text-[10px] text-gray-600">
+        Developer stake:{" "}
+        {developerStake !== undefined
+          ? `${formatEther(developerStake)} ETH`
+          : "—"}
+        {" · "}
+        Reviewer reward pool:{" "}
+        {reviewerRewardPool !== undefined
+          ? `${formatEther(reviewerRewardPool)} ETH`
+          : "—"}
+        {developer && (
+          <>
+            {" · "}Developer: {developer.slice(0, 6)}...{developer.slice(-4)}
+          </>
+        )}
+        {company && (
+          <>
+            {" · "}Company: {company.slice(0, 6)}...{company.slice(-4)}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ReviewerPage() {
   const [search, setSearch] = useState("");
   const [projects, setProjects] = useState<ProjectData[]>(MOCK_PROJECTS_FALLBACK);
@@ -1349,32 +1780,43 @@ function ReviewerPage() {
       setSearchError("");
       return;
     }
+
     const timer = setTimeout(async () => {
       setIsSearching(true);
       setSearchError("");
+
       try {
         const res = await fetch(
           `https://api.github.com/search/repositories?q=${encodeURIComponent(search)}&sort=stars&order=desc&per_page=8`,
           { headers: { Accept: "application/vnd.github+json" } }
         );
+
         if (res.status === 403) {
           setSearchError("GitHub rate limit reached. Try again in a minute.");
           setIsSearching(false);
           return;
         }
+
         const data = await res.json();
-        const repos: ProjectData[] = (data.items ?? []).map((r: GitHubRepo) => ({
-          id: String(r.id),
-          name: r.full_name,
-          description: r.description ?? "No description provided.",
-          language: r.language ?? "Unknown",
-          openPRs: r.open_issues_count,
-          totalStaked: (Math.random() * 2).toFixed(3),
-          minStake: "0.001",
-          trustScore: Math.floor(70 + Math.random() * 30),
-          tags: r.topics.slice(0, 3).length ? r.topics.slice(0, 3) : [r.language ?? "code"],
-          html_url: r.html_url,
-        }));
+
+        const repos: ProjectData[] = (data.items ?? []).map(
+          (r: GitHubRepo) => ({
+            id: String(r.id),
+            name: r.full_name,
+            description: r.description ?? "No description provided.",
+            language: r.language ?? "Unknown",
+            openPRs: r.open_issues_count,
+            totalStaked: (Math.random() * 2).toFixed(3),
+            minStake: "0.001",
+            trustScore: Math.floor(70 + Math.random() * 30),
+            tags:
+              r.topics.slice(0, 3).length
+                ? r.topics.slice(0, 3)
+                : [r.language ?? "code"],
+            html_url: r.html_url,
+          })
+        );
+
         setProjects(repos);
       } catch {
         setSearchError("Could not reach GitHub API. Check your connection.");
@@ -1382,13 +1824,23 @@ function ReviewerPage() {
         setIsSearching(false);
       }
     }, 500);
+
     return () => clearTimeout(timer);
   }, [search]);
-  
+
   return (
     <div className="space-y-6">
+
+      {/* ───────────── REAL DEVTRUST V3 DEMO ───────────── */}
+      <V3ReviewerStakeCard />
+
+      {/* ───────────── EXISTING REVIEWER UI ───────────── */}
+
       <div className="grid lg:grid-cols-2 gap-5">
-        <ReviewerStakeCard onStakeSuccess={() => refetchIsStaked()} />
+        <ReviewerStakeCard
+          onStakeSuccess={() => refetchIsStaked()}
+        />
+
         <ManualEntryCard
           isStaked={!!isStaked}
           onStakeManual={(url) => {
@@ -1401,7 +1853,7 @@ function ReviewerPage() {
                 url,
                 stakedAt: new Date().toISOString(),
               });
-              // Also record this in the shared PR registry so developer sees reviewer count
+
               addReviewerStakeToRegistry(url, {
                 githubId: user.id,
                 githubLogin: user.login,
@@ -1415,83 +1867,131 @@ function ReviewerPage() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-bold text-white" style={{ fontFamily: "var(--font-display)" }}>
+            <h3
+              className="font-bold text-white"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
               Browse Active Projects
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">Projects open for reviewer staking</p>
+
+            <p className="text-xs text-gray-500 mt-0.5">
+              Projects open for reviewer staking
+            </p>
           </div>
+
           <div className="flex items-center gap-2">
             <Eye className="w-4 h-4 text-gray-500" />
+
             <span className="text-xs text-gray-500">
-              {isSearching ? "Searching…" : `${projects.length} projects`}
+              {isSearching
+                ? "Searching…"
+                : `${projects.length} projects`}
             </span>
           </div>
         </div>
 
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+
           <input
             type="text"
             placeholder="Search GitHub repos"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }}
-            onFocus={(e) => (e.target.style.borderColor = "rgba(0,240,255,0.4)")}
-            onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+            onFocus={(e) =>
+              (e.target.style.borderColor =
+                "rgba(0,240,255,0.4)")
+            }
+            onBlur={(e) =>
+              (e.target.style.borderColor =
+                "rgba(255,255,255,0.1)")
+            }
           />
         </div>
 
         {!isConnected && (
           <div
             className="flex items-center gap-2 px-4 py-3 rounded-xl mb-4 text-xs"
-            style={{ background: "rgba(0,240,255,0.06)", border: "1px solid rgba(0,240,255,0.2)" }}
+            style={{
+              background: "rgba(0,240,255,0.06)",
+              border: "1px solid rgba(0,240,255,0.2)",
+            }}
           >
             <AlertCircle className="w-4 h-4 text-[#00f0ff]" />
-            <span className="text-[#00f0ff]">Connect wallet and stake to stake on projects.</span>
+
+            <span className="text-[#00f0ff]">
+              Connect wallet and stake to stake on projects.
+            </span>
           </div>
         )}
 
         {isConnected && !isStaked && (
           <div
             className="flex items-center gap-2 px-4 py-3 rounded-xl mb-4 text-xs"
-            style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}
+            style={{
+              background: "rgba(251,191,36,0.08)",
+              border: "1px solid rgba(251,191,36,0.25)",
+            }}
           >
             <AlertCircle className="w-4 h-4 text-yellow-400" />
-            <span className="text-yellow-300">Become a reviewer first by staking above.</span>
+
+            <span className="text-yellow-300">
+              Become a reviewer first by staking above.
+            </span>
           </div>
         )}
 
         {searchError && (
-  <div className="flex items-center gap-2 px-4 py-3 rounded-xl mb-4 text-xs"
-    style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)" }}>
-    <AlertCircle className="w-4 h-4 text-red-400" />
-    <span className="text-red-300">{searchError}</span>
-  </div>
-)}
-{isSearching && (
-  <div className="flex items-center justify-center py-12 gap-3 text-gray-400 text-sm">
-    <div className="w-4 h-4 border-2 border-[#00f0ff]/40 border-t-[#00f0ff] rounded-full animate-spin" />
-    Searching GitHub…
-  </div>
-)}
-{!isSearching && projects.length === 0 && search.trim() && (
-  <div className="text-center py-12 text-gray-500 text-sm">
-    No repositories found for "{search}".
-  </div>
-)}
-{!isSearching && (
-  <div className="grid sm:grid-cols-2 gap-4">
-    {projects.map((p) => (
-      <ProjectCard key={p.id} project={p} isStaked={!!isStaked} onStake={(proj) => setStakeTarget(proj)} />
-    ))}
-  </div>
-)}
-      </div> {/* closes Browse Active Projects div */}
+          <div
+            className="flex items-center gap-2 px-4 py-3 rounded-xl mb-4 text-xs"
+            style={{
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.25)",
+            }}
+          >
+            <AlertCircle className="w-4 h-4 text-red-400" />
 
-      {/* My Stakes Panel */}
+            <span className="text-red-300">
+              {searchError}
+            </span>
+          </div>
+        )}
 
-      {/* My Stakes Panel */}
+        {isSearching && (
+          <div className="flex items-center justify-center py-12 gap-3 text-gray-400 text-sm">
+            <div className="w-4 h-4 border-2 border-[#00f0ff]/40 border-t-[#00f0ff] rounded-full animate-spin" />
+            Searching GitHub…
+          </div>
+        )}
+
+        {!isSearching &&
+          projects.length === 0 &&
+          search.trim() && (
+            <div className="text-center py-12 text-gray-500 text-sm">
+              No repositories found for "{search}".
+            </div>
+          )}
+
+        {!isSearching && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {projects.map((p) => (
+              <ProjectCard
+                key={p.id}
+                project={p}
+                isStaked={!!isStaked}
+                onStake={(proj) => setStakeTarget(proj)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* My Stakes */}
       {user && <MyStakesPanel githubId={user.id} />}
 
       {stakeTarget && (

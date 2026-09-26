@@ -1,181 +1,130 @@
-// ─── Contract Configuration ───────────────────────────────────────────────────
-// Replace CONTRACT_ADDRESS with the address you get after deploying DevTrust.sol
-// Currently set to the local Hardhat default (first deploy address)
-export const CONTRACT_ADDRESS = "0xa28EC65D8D52fc77Bfbe553858312B9557EEc5Ad" as const;
+import { parseAbi } from "viem";
 
-export const CONTRACT_ABI = [
-  {
-    inputs: [{ internalType: "string", name: "_trustName", type: "string" }],
-    stateMutability: "nonpayable",
-    type: "constructor",
-  },
-  {
-    anonymous: false,
-    inputs: [{ indexed: false, internalType: "address", name: "newOracle", type: "address" }],
-    name: "OracleUpdated",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "address", name: "user", type: "address" },
-      { indexed: false, internalType: "string", name: "data", type: "string" },
-      { indexed: false, internalType: "uint256", name: "timestamp", type: "uint256" },
-    ],
-    name: "RecordAdded",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "address", name: "developer", type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
-    ],
-    name: "Rewarded",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "address", name: "developer", type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
-    ],
-    name: "Slashed",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "address", name: "user", type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
-    ],
-    name: "Staked",
-    type: "event",
-  },
-  {
-    inputs: [
-      { internalType: "address", name: "_user", type: "address" },
-      { internalType: "string", name: "_data", type: "string" },
-    ],
-    name: "addRecord",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "creationTime",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "index", type: "uint256" }],
-    name: "getRecord",
-    outputs: [
-      { internalType: "address", name: "user", type: "address" },
-      { internalType: "string", name: "data", type: "string" },
-      { internalType: "uint256", name: "timestamp", type: "uint256" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "getTotalRecords",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "getTrustInfo",
-    outputs: [
-      { internalType: "string", name: "", type: "string" },
-      { internalType: "uint256", name: "", type: "uint256" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "user", type: "address" }],
-    name: "isStaked",
-    outputs: [{ internalType: "bool", name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "oracle",
-    outputs: [{ internalType: "address", name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "owner",
-    outputs: [{ internalType: "address", name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    name: "records",
-    outputs: [
-      { internalType: "address", name: "user", type: "address" },
-      { internalType: "string", name: "data", type: "string" },
-      { internalType: "uint256", name: "timestamp", type: "uint256" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "developer", type: "address" }],
-    name: "reward",
-    outputs: [],
-    stateMutability: "payable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "_oracle", type: "address" }],
-    name: "setOracle",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "developer", type: "address" }],
-    name: "slash",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "stake",
-    outputs: [],
-    stateMutability: "payable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "", type: "address" }],
-    name: "stakes",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "trustName",
-    outputs: [{ internalType: "string", name: "", type: "string" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
+export const CONTRACT_ADDRESS =
+  "0x38683719B6EdFa2ba2F48A97C9248b0085cE2b4B" as const;
 
-// Minimum stake amount: 0.001 ETH (same as web3-frontend)
-export const MIN_STAKE_ETH = "0.001";
+export const CONTRACT_ABI = parseAbi([
+  // --------------------------------------------------
+  // PR REGISTRATION
+  // --------------------------------------------------
 
-// Backend URL for PR verification (Member B's DevTrust backend)
-// Replace with your deployed Render URL
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+  "function registerPR(string repository, uint256 prNumber, string prUrl, address company, uint256 reviewerRewardPool, uint256 minReviewerStake) payable returns (uint256)",
+
+  // --------------------------------------------------
+  // REVIEWER STAKING
+  // --------------------------------------------------
+
+  "function stakeOnPR(uint256 prId, bool approveVote) payable",
+
+  // --------------------------------------------------
+  // GITHUB ORACLE
+  // --------------------------------------------------
+
+  "function verifyPRMerged(uint256 prId, string mergeCommit)",
+
+  // --------------------------------------------------
+  // COMPANY DECISION
+  // --------------------------------------------------
+
+  "function approvePR(uint256 prId)",
+  "function rejectPR(uint256 prId)",
+
+  // --------------------------------------------------
+  // SETTLEMENT
+  // --------------------------------------------------
+
+  "function settlePR(uint256 prId)",
+
+  // --------------------------------------------------
+  // PR INFORMATION
+  // --------------------------------------------------
+
+  "function getPRBasic(uint256 prId) view returns (uint256 id, string repository, uint256 prNumber, string prUrl, address developer, address company)",
+
+  "function getPRStaking(uint256 prId) view returns (uint256 developerStake, uint256 reviewerRewardPool, uint256 totalReviewerStake, uint256 reviewerCount)",
+
+  "function getPRStatus(uint256 prId) view returns (uint8 status, uint256 createdAt, uint256 mergedAt, uint256 challengeDeadline, bool settled)",
+
+  "function getPRMergeInfo(uint256 prId) view returns (string repository, uint256 prNumber, string prUrl, string mergeCommit)",
+
+  // --------------------------------------------------
+  // V3 TESTING THRESHOLD
+  // --------------------------------------------------
+
+  "function getPRThreshold(uint256 prId) view returns (uint256 minReviewerStake, bool testingEligible)",
+
+  "function isEligibleForTesting(uint256 prId) view returns (bool)",
+
+  "function getTestingEligibility(uint256 prId) view returns (uint256 totalReviewerStake, uint256 minReviewerStake, bool testingEligible)",
+
+  // --------------------------------------------------
+  // REVIEW INFORMATION
+  // --------------------------------------------------
+
+  "function getReview(uint256 prId, address reviewer) view returns (address reviewer, uint256 stake, bool approveVote, bool settled, bool exists)",
+
+  "function getReviewerCount(uint256 prId) view returns (uint256)",
+
+  "function getReviewerAt(uint256 prId, uint256 index) view returns (address)",
+
+  // --------------------------------------------------
+  // REPUTATION / SBT
+  // --------------------------------------------------
+
+  "function reputation(address developer) view returns (uint256)",
+
+  "function getSBTInfo(uint256 tokenId) view returns (uint256 prId, address developer, uint256 mintedAt)",
+
+  // --------------------------------------------------
+  // CONTRACT CONFIGURATION
+  // --------------------------------------------------
+
+  "function oracle() view returns (address)",
+
+  "function owner() view returns (address)",
+
+  "function treasury() view returns (address)",
+
+  "function challengePeriod() view returns (uint256)",
+
+  "function nextPRId() view returns (uint256)",
+
+  // --------------------------------------------------
+  // EVENTS
+  // --------------------------------------------------
+
+  "event PRRegistered(uint256 indexed prId, string repository, uint256 prNumber, address indexed developer, uint256 developerStake, uint256 reviewerRewardPool, uint256 minReviewerStake)",
+
+  "event DeveloperStakeDeposited(uint256 indexed prId, address indexed developer, uint256 amount)",
+
+  "event ReviewerStaked(uint256 indexed prId, address indexed reviewer, uint256 amount, bool approveVote)",
+
+  "event ReviewerStakeThresholdReached(uint256 indexed prId, uint256 totalReviewerStake, uint256 minReviewerStake)",
+
+  "event PRMergeVerified(uint256 indexed prId, string mergeCommit, uint256 timestamp, uint256 challengeDeadline)",
+
+  "event PRApproved(uint256 indexed prId, address indexed company)",
+
+  "event PRRejected(uint256 indexed prId, address indexed company)",
+
+  "event ReviewerRewarded(uint256 indexed prId, address indexed reviewer, uint256 stakeReturned, uint256 reward)",
+
+  "event ReviewerSlashed(uint256 indexed prId, address indexed reviewer, uint256 amount)",
+
+  "event DeveloperStakeReturned(uint256 indexed prId, address indexed developer, uint256 amount)",
+
+  "event DeveloperReputationUpdated(address indexed developer, uint256 newReputation)",
+
+  "event SkillSBTMinted(uint256 indexed tokenId, address indexed developer, uint256 indexed prId)",
+
+  "event PRSettled(uint256 indexed prId, bool approved, uint256 reviewerCount, uint256 totalReviewerStake)",
+]);
+
+export const MIN_DEVELOPER_STAKE_ETH = "0.001";
+
+export const MIN_REVIEWER_STAKE_ETH = "0.001";
+
+export const MIN_STAKE_ETH = MIN_REVIEWER_STAKE_ETH;
+
+export const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";

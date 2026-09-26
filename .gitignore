@@ -4,3 +4,7 @@ node_modules/
 dist/
 .DS_Store
 *.log
+
+# Hardhat generated files
+backend/artifacts/
+backend/cache/

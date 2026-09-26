@@ -8,7 +8,12 @@
     "set-oracle": "node set-oracle.js",
     "test": "npx mocha"
   },
-  "keywords": ["ethereum", "web3", "oracle", "github"],
+  "keywords": [
+    "ethereum",
+    "web3",
+    "oracle",
+    "github"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -18,10 +23,13 @@
     "dotenv": "^17.3.1",
     "ethers": "^6.16.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.3.1"
+    "express-rate-limit": "^8.3.1",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "chai": "^6.2.2",
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "chai": "^4.5.0",
+    "hardhat": "^2.29.1",
     "mocha": "^11.3.0"
   }
 }
