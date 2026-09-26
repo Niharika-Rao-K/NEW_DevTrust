@@ -5,7 +5,15 @@ const path = require("path");
 const cors = require("cors");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
+const { Pool } = require("pg");
 require("dotenv").config();
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false,
+    },
+});
 
 const app = express();
 app.set("trust proxy", 1);
@@ -21,6 +29,7 @@ const REQUIRED_ENV = [
     "GITHUB_CLIENT_ID",
     "GITHUB_CLIENT_SECRET",
     "GITHUB_REDIRECT_URI",
+    "DATABASE_URL",
 ];
 
 const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
@@ -261,17 +270,22 @@ function requireAdminToken(req, res, next) {
 // GITHUB USER → WALLET MAPPING
 // ============================================================
 
-function findRegisteredWallet(githubLogin) {
-    const users = readJSON(USERS_PATH, []);
-
-    const user = users.find(
-        (entry) =>
-            entry.githubLogin &&
-            entry.githubLogin.toLowerCase() ===
-                githubLogin.toLowerCase()
+async function findRegisteredWallet(githubLogin) {
+    const result = await pool.query(
+        `
+        SELECT
+            github_login AS "githubLogin",
+            wallet_address AS "walletAddress",
+            registered_at AS "registeredAt",
+            updated_at AS "updatedAt"
+        FROM users
+        WHERE LOWER(github_login) = LOWER($1)
+        LIMIT 1
+        `,
+        [githubLogin]
     );
 
-    return user || null;
+    return result.rows[0] || null;
 }
 
 // ============================================================
@@ -555,7 +569,7 @@ app.post(
         // --------------------------------------------------------
 
         const registeredUser =
-            findRegisteredWallet(githubLogin);
+            await findRegisteredWallet(githubLogin);
 
         if (!registeredUser) {
             console.log(
@@ -666,7 +680,7 @@ app.post(
 // WALLET REGISTRATION
 // ============================================================
 
-app.post("/api/register-wallet", (req, res) => {
+app.post("/api/register-wallet", async (req, res) => {
     try {
         const {
             githubLogin,
@@ -691,42 +705,41 @@ app.post("/api/register-wallet", (req, res) => {
             });
         }
 
-        const users =
-            readJSON(USERS_PATH, []);
-
-        const existingUser =
-            users.find(
-                (user) =>
-                    user.githubLogin &&
-                    user.githubLogin.toLowerCase() ===
-                        githubLogin.toLowerCase()
-            );
-
-        if (existingUser) {
-            existingUser.walletAddress =
-                walletAddress;
-
-            existingUser.updatedAt =
-                new Date().toISOString();
-        } else {
-            users.push({
+        const result = await pool.query(
+            `
+            INSERT INTO users (
+                github_login,
+                wallet_address,
+                registered_at,
+                updated_at
+            )
+            VALUES ($1, $2, NOW(), NOW())
+            ON CONFLICT (github_login)
+            DO UPDATE SET
+                wallet_address = EXCLUDED.wallet_address,
+                updated_at = NOW()
+            RETURNING
+                github_login AS "githubLogin",
+                wallet_address AS "walletAddress",
+                registered_at AS "registeredAt",
+                updated_at AS "updatedAt"
+            `,
+            [
                 githubLogin,
                 walletAddress,
-                registeredAt:
-                    new Date().toISOString(),
-            });
-        }
+            ]
+        );
 
-        writeJSON(USERS_PATH, users);
+        const user = result.rows[0];
 
         console.log(
-            `Wallet registered: ${githubLogin} → ${walletAddress}`
+            `Wallet registered: ${user.githubLogin} → ${user.walletAddress}`
         );
 
         return res.json({
             success: true,
-            githubLogin,
-            walletAddress,
+            githubLogin: user.githubLogin,
+            walletAddress: user.walletAddress,
         });
     } catch (error) {
         console.error(
@@ -1061,51 +1074,79 @@ async function processQueue() {
 }
 
 // ============================================================
+// DATABASE INITIALIZATION
+// ============================================================
+
+async function initializeDatabase() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            github_login VARCHAR(255) UNIQUE NOT NULL,
+            wallet_address VARCHAR(42) NOT NULL,
+            registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ
+        );
+    `);
+
+    console.log("PostgreSQL database initialized.");
+}
+
+// ============================================================
 // START SERVER
 // ============================================================
 
-setInterval(
-    () => {
-        processQueue().catch(
-            (error) => {
-                console.error(
-                    "Blockchain processor error:",
-                    error
+initializeDatabase()
+    .then(() => {
+        setInterval(
+            () => {
+                processQueue().catch(
+                    (error) => {
+                        console.error(
+                            "Blockchain processor error:",
+                            error
+                        );
+                    }
                 );
-            }
+            },
+            10000
         );
-    },
-    10000
-);
 
-app.listen(PORT, () => {
-    console.log("");
-    console.log(
-        "========================================"
-    );
-    console.log(
-        "DevTrust Backend v2"
-    );
-    console.log(
-        "========================================"
-    );
-    console.log(
-        `Server: http://localhost:${PORT}`
-    );
-    console.log(
-        `Contract: ${process.env.CONTRACT_ADDRESS}`
-    );
-    console.log(
-        `Oracle: ${oracleWallet.address}`
-    );
-    console.log(
-        `Frontend: ${FRONTEND_URL}`
-    );
-    console.log(
-        "Blockchain processor: active"
-    );
-    console.log(
-        "========================================"
-    );
-    console.log("");
-});
+        app.listen(PORT, () => {
+            console.log("");
+            console.log(
+                "========================================"
+            );
+            console.log(
+                "DevTrust Backend v2"
+            );
+            console.log(
+                "========================================"
+            );
+            console.log(
+                `Server: http://localhost:${PORT}`
+            );
+            console.log(
+                `Contract: ${process.env.CONTRACT_ADDRESS}`
+            );
+            console.log(
+                `Oracle: ${oracleWallet.address}`
+            );
+            console.log(
+                `Frontend: ${FRONTEND_URL}`
+            );
+            console.log(
+                "Blockchain processor: active"
+            );
+            console.log(
+                "========================================"
+            );
+            console.log("");
+        });
+    })
+    .catch((error) => {
+        console.error(
+            "PostgreSQL initialization failed:",
+            error
+        );
+        process.exit(1);
+    });
