@@ -580,7 +580,7 @@ function CompanyGate() {
 // ─── DevTrust v3: Company Testing Inbox ─────────────────────────────────────
 
 function V3CompanyTestingInbox() {
-  const DEMO_PR_ID = 1n;
+  const DEMO_PR_ID = 2n;
 
   const { address } = useAccount();
 

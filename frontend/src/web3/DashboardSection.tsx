@@ -1336,7 +1336,7 @@ function MyStakesPanel({ githubId }: { githubId: string }) {
 // ─── DevTrust v3 Live Reviewer Staking Demo ────────────────────────────────
 
 function V3ReviewerStakeCard() {
-  const DEMO_PR_ID = 1n;
+  const DEMO_PR_ID = 2n;
 
   const { address, isConnected } = useAccount();
 
