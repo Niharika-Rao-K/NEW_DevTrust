@@ -258,3 +258,6 @@ Testing DevTrust webhook integration
 
 ## DevTrust v2 End-to-End Test
 This change is used to validate the DevTrust v2 GitHub PR verification workflow.
+
+## Oracle E2E Test - PR #8
+This change is used to validate the DevTrust GitHub webhook and oracle verification workflow.
